@@ -372,20 +372,67 @@ async fn pick_media(
     let mut files = Vec::new();
     for file in picked {
         let path: PathBuf = file.into_path().map_err(internal)?;
-        let Some(kind) = media_kind(&path) else {
-            continue;
-        };
-        allow_media(&app, &path)?;
-        files.push(MediaFile {
-            name: path
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_default(),
-            path: path.to_string_lossy().into_owned(),
-            kind,
-        });
+        if let Some(media) = to_media_file(&app, path)? {
+            files.push(media);
+        }
     }
     Ok(files)
+}
+
+/// Archivo compatible -> MediaFile, ya permitido en el protocolo asset. Otros tipos -> None.
+fn to_media_file(app: &AppHandle, path: PathBuf) -> Result<Option<MediaFile>, CommandError> {
+    let Some(kind) = media_kind(&path) else {
+        return Ok(None);
+    };
+    allow_media(app, &path)?;
+    Ok(Some(MediaFile {
+        name: path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+        path: path.to_string_lossy().into_owned(),
+        kind,
+    }))
+}
+
+/// Límite de archivos al añadir una carpeta: evita congelar la app si se elige, por ejemplo, la carpeta personal.
+const MAX_FOLDER_FILES: usize = 2000;
+
+/// Recorre la carpeta y sus subcarpetas (sin las ocultas) y devuelve los archivos compatibles, ordenados por ruta.
+/// None si se cancela el diálogo; lista vacía si la carpeta no tiene nada compatible.
+#[tauri::command]
+async fn pick_media_folder(app: AppHandle, title: String) -> Result<Option<Vec<MediaFile>>, CommandError> {
+    let Some(folder) = app.dialog().file().set_title(title).blocking_pick_folder() else {
+        return Ok(None);
+    };
+    let root = folder.into_path().map_err(internal)?;
+
+    let mut found = Vec::new();
+    let mut pending = vec![root];
+    while let Some(dir) = pending.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        for path in entries.flatten().map(|e| e.path()) {
+            let hidden = path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with('.'));
+            if hidden {
+                continue;
+            }
+            if path.is_dir() {
+                pending.push(path);
+            } else if media_kind(&path).is_some() {
+                found.push(path);
+            }
+        }
+        if found.len() >= MAX_FOLDER_FILES {
+            break;
+        }
+    }
+    found.sort();
+    found.truncate(MAX_FOLDER_FILES);
+
+    let mut files = Vec::with_capacity(found.len());
+    for path in found {
+        if let Some(media) = to_media_file(&app, path)? {
+            files.push(media);
+        }
+    }
+    Ok(Some(files))
 }
 
 // Errores de la interfaz al registro de la app: sin esto, un fallo en el webview no deja rastro.
@@ -543,6 +590,7 @@ pub fn run() {
             get_output_state,
             set_output_style,
             pick_media,
+            pick_media_folder,
             report_output_error,
             log_client_error,
             list_bibles,

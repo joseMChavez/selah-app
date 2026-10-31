@@ -36,6 +36,7 @@ Cada prueba se repite en Linux, Windows y macOS (D-006). Los resultados alimenta
 
 ### Notas y hallazgos
 
+- **2026-10-31 — Dibujo y clics desplazados en WebKitGTK (Linux).** Con Hyprland/Wayland, escala 1,5, `GDK_SCALE=2` y gráfica híbrida Intel + NVIDIA GTX 1650 Ti, WebKitGTK 2.52 pintaba elementos fuera de sitio y los clics caían en el botón vecino o en capas invisibles. Causa: el renderizador DMA-BUF. Solución: `WEBKIT_DISABLE_DMABUF_RENDERER=1`, que la app activa sola al arrancar (`src-tauri/src/main.rs`). Además, la vista de salida usa `contain: strict` y las vistas previas ignoran el ratón, para que ningún contenido pueda tapar la consola. Revisar en otros equipos Linux (D-010: criterio «pantalla completa estable en Linux»).
 
 ## Prueba 2 — Imagen, video y PDF en la salida
 

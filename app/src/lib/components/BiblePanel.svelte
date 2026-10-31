@@ -12,11 +12,14 @@
     prepared,
     live,
     onprepare,
+    onsend,
     onerror,
   }: {
     prepared: OutputContent;
     live: OutputContent;
     onprepare: (content: OutputContent) => void;
+    /** Doble clic en un versículo: prepararlo y mostrarlo en pantalla en un solo gesto. */
+    onsend: (content: OutputContent) => void;
     onerror: (message: Message) => void;
   } = $props();
 
@@ -112,16 +115,21 @@
     return `${bookName(book, language)} ${chapter}${verse ? `:${verse}` : ""}`;
   }
 
-  function prepareFrom(book: number, chapter: number, verses: Verse[], start: number) {
-    if (!bible) return;
+  function scripture(book: number, chapter: number, verses: Verse[], start: number): OutputContent | null {
+    if (!bible) return null;
     const index = verses.findIndex((v) => v.number === start);
-    onprepare({
+    return {
       kind: "scripture",
       verses: verses.map((v) => ({ reference: refText(book, chapter, v.number), text: v.text })),
       index: Math.max(index, 0),
       version: bible.abbreviation,
       copyright: bible.copyright,
-    });
+    };
+  }
+
+  function prepareFrom(book: number, chapter: number, verses: Verse[], start: number) {
+    const content = scripture(book, chapter, verses, start);
+    if (content) onprepare(content);
   }
 
   async function scrollToVerse(n: number) {
@@ -191,17 +199,26 @@
     await tick();
   }
 
-  function clickVerse(verse: Verse) {
-    if (view.step !== "verses") return;
+  /** La serie que recorre un versículo: dentro del rango buscado, solo el rango; fuera, el capítulo entero. */
+  function verseContent(verse: Verse): OutputContent | null {
+    if (view.step !== "verses") return null;
     const { book, chapter, verses, range } = view;
-    // Dentro del rango buscado se recorre solo el rango; fuera de él, el capítulo entero.
     if (range && verse.number >= range[0] && verse.number <= range[1]) {
-      prepareFrom(book, chapter, verses.filter((v) => v.number >= range[0] && v.number <= range[1]), verse.number);
-    } else {
-      view = { ...view, range: null };
-      prepareFrom(book, chapter, verses, verse.number);
+      return scripture(book, chapter, verses.filter((v) => v.number >= range[0] && v.number <= range[1]), verse.number);
     }
-    scrollToVerse(verse.number);
+    view = { ...view, range: null };
+    return scripture(book, chapter, verses, verse.number);
+  }
+
+  // Sin desplazar la lista: si se moviera entre los dos clics, el doble clic caería en otro versículo.
+  function clickVerse(verse: Verse) {
+    const content = verseContent(verse);
+    if (content) onprepare(content);
+  }
+
+  function doubleClickVerse(verse: Verse) {
+    const content = verseContent(verse);
+    if (content) onsend(content);
   }
 
   function adjacentChapter(delta: 1 | -1): [number, number] | null {
@@ -341,6 +358,7 @@
               class:prepared={ref === preparedRef}
               class:live={ref === liveRef}
               onclick={() => clickVerse(verse)}
+              ondblclick={() => doubleClickVerse(verse)}
             >{verse.number}</button>
           {/each}
         </div>
@@ -354,6 +372,7 @@
                 class:prepared={ref === preparedRef}
                 class:live={ref === liveRef}
                 onclick={() => clickVerse(verse)}
+                ondblclick={() => doubleClickVerse(verse)}
               >
                 <span class="num">{verse.number}</span>
                 <span class="vtext">{verse.text}</span>

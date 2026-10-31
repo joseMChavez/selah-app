@@ -94,6 +94,8 @@ export interface Platform {
   onOutputState(handler: (state: OutputState) => void): Promise<() => void>;
   /** Abre el selector de archivos; devuelve [] si se cancela. */
   pickMedia(title: string, filterName: string): Promise<MediaFile[]>;
+  /** Elige una carpeta y devuelve sus archivos compatibles, subcarpetas incluidas (null si se cancela). */
+  pickMediaFolder(title: string): Promise<MediaFile[] | null>;
   /** URL que el webview puede cargar para un archivo local ya permitido. */
   mediaUrl(path: string): string;
   reportOutputError(message: string): Promise<void>;

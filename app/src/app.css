@@ -145,6 +145,7 @@ select.field { cursor: pointer; }
 .segmented button[aria-selected="true"] { background: var(--accent); color: var(--accent-text); }
 
 .screen {
+  position: relative;
   aspect-ratio: 16 / 9;
   width: 100%;
   border-radius: 8px;

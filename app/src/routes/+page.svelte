@@ -317,7 +317,16 @@
       </div>
       <!-- Los paneles se ocultan en vez de destruirse, para no perder la búsqueda ni el texto al cambiar de pestaña. -->
       <div class="card-body" hidden={tab !== "bible"}>
-        <BiblePanel {prepared} live={output.content} onprepare={prepare} onerror={(m) => (error = m)} />
+        <BiblePanel
+          {prepared}
+          live={output.content}
+          onprepare={prepare}
+          onsend={(content) => {
+            prepare(content);
+            send(content);
+          }}
+          onerror={(m) => (error = m)}
+        />
       </div>
       <div class="card-body" hidden={tab !== "text"}>
         <TextPanel onprepare={prepare} />

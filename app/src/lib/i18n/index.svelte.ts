@@ -51,7 +51,8 @@ window.addEventListener("storage", (event) => {
 });
 
 export function t(key: MessageKey, params: Record<string, string | number> = {}): string {
-  const template = locales[i18n.locale].messages[key] ?? es[key];
+  // Si faltara una traducción, se muestra la clave: un texto ausente no debe romper la consola.
+  const template: string = locales[i18n.locale].messages[key] ?? es[key] ?? key;
   return template.replace(/\{(\w+)\}/g, (match, name) => (name in params ? String(params[name]) : match));
 }
 

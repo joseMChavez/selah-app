@@ -45,6 +45,7 @@
     overflow: hidden;
   }
   .output {
+    position: relative;
     width: 100vw;
     height: 100vh;
     cursor: none;

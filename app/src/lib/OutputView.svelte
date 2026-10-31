@@ -101,6 +101,7 @@
 
 <div
   class="view"
+  class:preview
   class:pattern={content.kind === "testPattern"}
   style:background-color={BACKGROUNDS[style.background]}
   bind:clientWidth={width}
@@ -139,11 +140,14 @@
 </div>
 
 <style>
+  /* Ocupa exactamente el recuadro de su contenedor (que debe estar posicionado).
+     contain: strict impide que el texto se dibuje o se posicione fuera, aunque el contenedor
+     tome su alto de aspect-ratio y el navegador no lo considere definido. */
   .view {
     container-type: size;
-    position: relative;
-    width: 100%;
-    height: 100%;
+    contain: strict;
+    position: absolute;
+    inset: 0;
     color: #f5f5f0;
     display: flex;
     flex-direction: column;
@@ -152,14 +156,16 @@
     overflow: hidden;
     font-family: "Inter", "Segoe UI", system-ui, sans-serif;
   }
+  /* Las vistas previas nunca reciben el ratón: no pueden tapar los controles de la consola. */
+  .view.preview { pointer-events: none; }
   .stage {
     position: absolute;
-    inset: 6cqh 6cqw;
+    inset: 6% 6%;
     display: flex;
     flex-direction: column;
     justify-content: center;
   }
-  .stage.with-credit { bottom: 11cqh; }
+  .stage.with-credit { bottom: 11%; }
   .stage.pos-top { justify-content: flex-start; }
   .stage.pos-bottom { justify-content: flex-end; }
   .body {

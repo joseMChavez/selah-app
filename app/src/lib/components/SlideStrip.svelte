@@ -76,7 +76,7 @@
     border-radius: 8px;
     cursor: pointer;
   }
-  .mini { display: block; aspect-ratio: 16 / 9; border-radius: 4px; overflow: hidden; pointer-events: none; }
+  .mini { position: relative; display: block; aspect-ratio: 16 / 9; border-radius: 4px; overflow: hidden; pointer-events: none; }
   .num {
     position: absolute;
     left: 7px;

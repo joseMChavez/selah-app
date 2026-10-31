@@ -12,6 +12,7 @@ export const tauriPlatform: Platform = {
   setOutputStyle: (style) => invoke("set_output_style", { style }),
   onOutputState: (handler) => listen<OutputState>("output-state", (event) => handler(event.payload)),
   pickMedia: (title, filterName) => invoke("pick_media", { title, filterName }),
+  pickMediaFolder: (title) => invoke("pick_media_folder", { title }),
   mediaUrl: (path) => convertFileSrc(path),
   reportOutputError: (message) => invoke("report_output_error", { message }),
   logError: (message) => invoke("log_client_error", { message }),
