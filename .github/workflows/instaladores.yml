@@ -1,0 +1,94 @@
+# Instaladores de Selah para Linux, Windows y macOS.
+# - Al subir una etiqueta vX.Y.Z: compila los tres sistemas y deja un borrador en Releases.
+# - A mano (Actions → Instaladores → Run workflow): compila y deja los archivos como artefactos.
+# Las Biblias XML no están en git, así que estos instaladores salen sin Biblias (ver D-013).
+name: Instaladores
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+            name: linux
+            args: ""
+          - platform: windows-latest
+            name: windows
+            args: ""
+          - platform: macos-latest
+            name: macos
+            args: "--target universal-apple-darwin"
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: La etiqueta coincide con la versión
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          version=$(node -p "require('./app/src-tauri/tauri.conf.json').version")
+          if [ "v$version" != "${{ github.ref_name }}" ]; then
+            echo "::error::La etiqueta ${{ github.ref_name }} no coincide con la versión $version de tauri.conf.json"
+            exit 1
+          fi
+
+      - name: Dependencias de Linux
+        if: matrix.name == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.name == 'macos' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri -> target
+
+      - name: Dependencias de la interfaz
+        working-directory: app
+        run: npm ci
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: app
+          args: ${{ matrix.args }}
+          # Sin etiqueta (ejecución a mano) solo compila; con etiqueta sube al borrador de la versión.
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          releaseName: Selah ${{ github.ref_name }}
+          releaseBody: |
+            Versión de prueba (MVP). Instaladores sin firmar: Windows y macOS mostrarán un aviso al abrirlos.
+            Las Biblias no vienen incluidas; se importan desde Selah (formato XML de Beblia).
+          releaseDraft: true
+          prerelease: true
+
+      - name: Guardar los instaladores como artefacto
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: selah-${{ matrix.name }}
+          path: |
+            app/src-tauri/target/release/bundle/
+            app/src-tauri/target/universal-apple-darwin/release/bundle/
+          if-no-files-found: error
