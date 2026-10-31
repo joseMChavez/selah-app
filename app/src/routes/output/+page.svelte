@@ -2,13 +2,19 @@
   import { onMount } from "svelte";
   import OutputView from "$lib/OutputView.svelte";
   import { platform, type OutputContent } from "$lib/platform";
+  import { t } from "$lib/i18n/index.svelte";
 
   let content = $state<OutputContent>({ kind: "empty" });
-  let size = $state("");
+  let dpr = $state(1);
+  let width = $state(0);
+  let height = $state(0);
+  // Derivado para que cambie también al cambiar de idioma.
+  let size = $derived(`${width}×${height} px · ${t("pattern.scale")} ${dpr}`);
 
   function measure() {
-    const dpr = window.devicePixelRatio;
-    size = `${Math.round(innerWidth * dpr)}×${Math.round(innerHeight * dpr)} px · escala ${dpr}`;
+    dpr = window.devicePixelRatio;
+    width = Math.round(innerWidth * dpr);
+    height = Math.round(innerHeight * dpr);
   }
 
   onMount(() => {
@@ -23,7 +29,7 @@
 <svelte:window onresize={measure} />
 
 <div class="output">
-  <OutputView {content} diagnostics={size} />
+  <OutputView {content} diagnostics={size} onerror={(message) => platform.reportOutputError(message)} />
 </div>
 
 <style>
