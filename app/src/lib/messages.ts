@@ -16,6 +16,10 @@ export function toMessage(e: unknown): Message {
     case "invalidContent": return { key: "error.invalidContent" };
     case "invalidBible": return { key: "error.invalidBible", params: { file: err.file, reason: err.reason } };
     case "bibleNotFound": return { key: "error.bibleNotFound" };
+    case "obsNotInstalled": return { key: "error.obsNotInstalled" };
+    case "obsRunning": return { key: "error.obsRunning" };
+    case "obsNotConnected": return { key: "error.obsNotConnected" };
+    case "obs": return { key: "error.obs", params: { message: err.message } };
     case "internal": return { key: "error.internal", params: { message: err.message } };
     default: return { key: "error.internal", params: { message: String(e) } };
   }

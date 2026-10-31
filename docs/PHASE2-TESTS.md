@@ -7,7 +7,7 @@ Cada prueba se repite en Linux, Windows y macOS (D-006). Los resultados alimenta
 | 1 | Consola + salida a pantalla completa en monitor elegido | en curso | pendiente | pendiente |
 | 2 | Imagen, video y PDF en la salida | en curso | pendiente | pendiente |
 | 3 | Cámara y audio en el webview | pendiente | pendiente | pendiente |
-| 4 | OBS por obs-websocket: escena con cámara + texto, emisión de prueba | pendiente | pendiente | pendiente |
+| 4 | OBS por obs-websocket: escena con cámara + texto, emisión de prueba | en curso | pendiente | pendiente |
 | 5 | Pasaje desde una Biblia local e importación de un archivo permitido | pendiente | pendiente | pendiente |
 
 ## Prueba 1 — Salida en monitor secundario
@@ -35,6 +35,9 @@ Cada prueba se repite en Linux, Windows y macOS (D-006). Los resultados alimenta
 | m. Escalas distintas | Con monitores de escala distinta (1.5 y 1.0) el texto se ve proporcionado en ambos | |
 
 ### Notas y hallazgos
+
+- Selah también usa las escenas y fuentes de texto que ya existan en OBS: lista todas las escenas y deja elegir la fuente de texto que recibe el texto. Los diseños de Selah pasan a ser opcionales. Pendiente de probar con escenas propias del usuario (en esta prueba OBS solo tenía las de Selah).
+- La conexión automática al abrir Selah reintenta 4 veces, cada 2 s: al reiniciar la app, el primer intento podía fallar.
 
 - **2026-10-31 — Dibujo y clics desplazados en WebKitGTK (Linux).** Con Hyprland/Wayland, escala 1,5, `GDK_SCALE=2` y gráfica híbrida Intel + NVIDIA GTX 1650 Ti, WebKitGTK 2.52 pintaba elementos fuera de sitio y los clics caían en el botón vecino o en capas invisibles. Causa: el renderizador DMA-BUF. Solución: `WEBKIT_DISABLE_DMABUF_RENDERER=1`, que la app activa sola al arrancar (`src-tauri/src/main.rs`). Además, la vista de salida usa `contain: strict` y las vistas previas ignoran el ratón, para que ningún contenido pueda tapar la consola. Revisar en otros equipos Linux (D-010: criterio «pantalla completa estable en Linux»).
 
@@ -64,3 +67,32 @@ Cada prueba se repite en Linux, Windows y macOS (D-006). Los resultados alimenta
 ### Notas y hallazgos
 
 **Añadido durante la prueba:** texto en diapositivas separadas por `***`, navegación de lo que está en pantalla (botones, miniaturas, flechas ← →) e interfaz en español, inglés e italiano. Las flechas fallaban porque WebKit no quita el foco del cuadro de texto al pulsar un botón y porque los botones de monitor las capturaban; corregido, pendiente de confirmar.
+
+## Prueba 4 — Transmisión con OBS (obs-websocket 5)
+
+**Implementación:** `app/src-tauri/src/obs.rs` con el crate `obws` (MIT). Selah detecta OBS, activa su WebSocket editando `plugin_config/obs-websocket/config.json` (solo con OBS cerrado y con un botón explícito; conserva puerto y contraseña, crea una si no hay), abre OBS con `--disable-shutdown-check` y se conecta a `127.0.0.1`. Crea tres escenas propias (`Selah · Cámara`, `Selah · Cámara + texto`, `Selah · Espera`) y no toca nada más. La clave de emisión no sale de OBS. Vista previa: captura JPEG de la escena al aire cada segundo.
+
+**Respuesta a D-008 («activar WebSocket sin abrir OBS manualmente»):** sí, editando su configuración con OBS cerrado. Con OBS abierto no sirve: OBS sobrescribe la configuración al salir.
+
+**Emisión de prueba sin internet:** servidor RTMP local con ffmpeg:
+`ffmpeg -listen 1 -i rtmp://127.0.0.1:1935/live/selah -c copy -f flv emision-prueba.flv`
+Destino en Selah: servidor `rtmp://127.0.0.1:1935/live`, clave `selah`.
+
+### Lista de comprobación
+
+| Caso | Resultado esperado | Linux (Hyprland/Wayland) |
+|---|---|---|
+| a. Detectar OBS | Selah sabe si OBS está instalado, abierto y con WebSocket activo |✅ |
+| b. Activar WebSocket | Con OBS cerrado se activa; con OBS abierto, Selah pide cerrarlo |✅ activado desde Selah con OBS cerrado |
+| c. Abrir OBS y conectar | Un botón abre OBS y Selah se conecta solo en menos de 25 s |✅ |
+| d. Crear diseños | Aparecen las 3 escenas de Selah con cámara, banda y espera; repetir no duplica nada |✅ (duplicado sin comprobar) |
+| e. Cámara | La lista muestra la webcam; cambiarla se ve en la vista previa |⚠️ sin webcam: v4l2 «Unable to open device» |
+| f. Cambiar de diseño | La escena cambia en OBS y la vista previa lo refleja en ~1 s | |
+| g. Texto en la emisión | Poner/quitar texto cambia la emisión; la pantalla del templo no cambia | |
+| h. Copiar desde el templo | Copia el versículo en pantalla con referencia y créditos; luego cambiar la proyección no cambia el texto copiado | |
+| i. Emitir | Iniciar envía al servidor RTMP local; la barra superior muestra AL AIRE y la duración |✅ H.264 1280×720 30 fps + AAC estéreo, >1 min estable |
+| j. Finalizar | Pide un segundo clic; el archivo `emision-prueba.flv` se reproduce | |
+| k. OBS se cierra | Selah avisa de la pérdida de conexión y no se bloquea | |
+| l. Independencia | Cambiar la proyección no cambia la emisión y viceversa | |
+
+### Notas y hallazgos
