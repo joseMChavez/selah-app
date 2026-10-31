@@ -1,6 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Selah",
+  "mainBinaryName": "selah",
   "version": "0.1.0",
   "identifier": "org.selah.app",
   "build": {
@@ -40,6 +41,23 @@
     ],
     "resources": {
       "resources/bibles/": "bibles/"
+    },
+    "category": "Utility",
+    "publisher": "joseMChavez",
+    "shortDescription": "Proyección y transmisión para iglesias",
+    "longDescription": "Selah proyecta Biblia, textos e imágenes en la pantalla del templo y controla la transmisión en vivo con OBS.",
+    "license": "GPL-3.0-only",
+    "linux": {
+      "deb": {
+        "section": "video",
+        "depends": ["gstreamer1.0-plugins-good", "gstreamer1.0-libav"]
+      },
+      "rpm": {
+        "depends": ["gstreamer1-plugins-good"]
+      },
+      "appimage": {
+        "bundleMediaFramework": true
+      }
     }
   }
 }

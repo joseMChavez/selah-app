@@ -2,11 +2,11 @@
 
 Aplicación de escritorio de código abierto para iglesias: proyección multimedia y control simplificado de transmisión en vivo, con dos hilos independientes (Proyección y Transmisión).
 
-**Estado:** MVP en desarrollo (v0.1). La parte de **Proyección** ya funciona; la de **Transmisión** (OBS) está pendiente.
+**Estado:** MVP en desarrollo (v0.1). **Proyección** funciona; **Transmisión** con OBS está en pruebas.
 
 - Plataformas objetivo: Windows, macOS y Linux (probado por ahora en Linux)
 - Interfaz: español, inglés e italiano
-- Base técnica: Tauri 2 + SvelteKit; OBS como motor de transmisión (pendiente)
+- Base técnica: Tauri 2 + SvelteKit; OBS como motor de transmisión
 - Licencia: GPL-3.0
 
 ## Qué hace ya
@@ -17,6 +17,10 @@ Aplicación de escritorio de código abierto para iglesias: proyección multimed
 - Textos en diapositivas (separadas por `***`), imágenes, videos y PDF, también por carpetas.
 - Ajuste automático del tamaño del texto, alineación, posición y fondo; pantalla en negro con vuelta a lo anterior.
 - Tema claro, oscuro o del sistema.
+
+## Descargas
+
+Los instaladores para Linux, Windows y macOS están en [Releases](https://github.com/joseMChavez/selah-app/releases). No incluyen Biblias: se importan desde la app (formato XML de Beblia). Cómo se publica una versión: [docs/RELEASES.md](docs/RELEASES.md).
 
 ## Desarrollo
 
