@@ -33,7 +33,7 @@
 ## D-007 — Importar Biblias en el formato de Holyrics (2026-10-31)
 - **Decisión:** Selah debe poder importar Biblias en el formato que usa Holyrics, para aprovechar las que cada iglesia ya posee.
 - **Proceso:** el autor colocará muestras en samples/holyrics-bibles/ cuando las consiga; con ellas se identifica el formato y se prueba el importador. Esa carpeta está en .gitignore por posible copyright.
-- **Estado:** formato por confirmar. Fuentes de terceros hablan de archivos .xml y .bib en .zip; no hay documentación oficial verificada. Hace falta un archivo de muestra.
+- **Estado (actualizado 2026-10-31):** suspendido. Las muestras `.bib` están cifradas (ver D-011). Se sustituye por D-012.
 - **Consecuencias:** se implementa como un adaptador más de la capa de proveedor de Biblia. Selah no incluye ni distribuye esas Biblias; solo lee las que el usuario ya tiene. No se usa código de Holyrics. Mostrar siempre licencia y atribución; si faltan metadatos, pedirlos al usuario.
 
 ## D-008 — OBS como motor de stream, con detección e instalación asistida (2026-10-31)
@@ -52,3 +52,15 @@
 - **Alternativas:** Electron desde el inicio (más predecible, más pesado); Qt (ligero, pero se pierde la reutilización de FreeShow).
 - **Consecuencias:** WebView2 en Windows (Chromium) y WebKit en macOS y Linux, así que hay que probar en dos familias de motores. El frontend debe hablar con el backend solo a través de una capa de adaptador propia, sin llamar a APIs de Tauri directamente, para que migrar sea barato. El backend en Rust no se reutiliza en Electron y habría que reescribirlo.
 - **Criterios para abandonar Tauri** (revisar en Fase 2): video que no reproduce de forma fiable en WebKit; pantalla completa en segundo monitor inestable en macOS o Linux; permisos o captura de cámara inviables; consumo no mejor que Electron al medirlo.
+
+## D-011 — El formato .bib de Holyrics está cifrado: no se importa (2026-10-31)
+- **Hallazgo:** las cinco muestras (LBLA, NTV, NVI, RV, RV1960) no tienen cabecera, tienen entropía de 8,000 bits/byte, no se comprimen y su tamaño es múltiplo de 16 bytes: cifrado por bloques.
+- **Decisión:** no descifrarlas. Saltarse una protección técnica es ilegal aparte de la licencia del texto (DMCA §1201; Directiva 2001/29/CE art. 6), y el brief prohíbe depender de formatos protegidos sin autorización.
+- **Alternativas:** pedir a Holyrics documentación o una vía de exportación.
+- **Consecuencias:** D-007 queda suspendida.
+
+## D-012 — Biblias en el formato XML de Beblia; licencias a cargo del autor (2026-10-31)
+- **Decisión:** Selah importa Biblias en el formato XML del repositorio github.com/Beblia/Holy-Bible-XML-Format (`bible > testament > book[number] > chapter[number] > verse[number]`). El autor elige las versiones (RVR1960, NVI, NTV, LBLA, VBL 2022) y se encarga de sus licencias.
+- **Motivo:** formato abierto y sencillo; cada archivo declara su procedencia y copyright en los atributos `translation`, `status`/`info` y `link` de `<bible>`.
+- **Alternativas:** RV1909 o Reina 1569 (dominio público, descartadas por antiguas); VBL 2022 (CC BY-SA 4.0); Zefania/OSIS.
+- **Consecuencias:** siempre que se elige una Biblia se muestra su copyright en la consola y en la pantalla. Actualización 2026-10-31: por decisión del autor, las Biblias van en el instalador como base (`app/src-tauri/resources/bibles/<idioma>/`, se empaquetan como recursos y se cargan sin importarlas); el usuario puede añadir más desde la app. Los `.xml` no se suben al repositorio (.gitignore). El repositorio Beblia no tiene licencia y varias versiones tienen derechos reservados: antes de publicar Selah o distribuir Biblias hay que tener la licencia de cada editorial. Los versículos vacíos (versículos unidos en algunas traducciones) se omiten.
