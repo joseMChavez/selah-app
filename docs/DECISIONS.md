@@ -1,0 +1,54 @@
+# Registro de decisiones
+
+## D-001 — Nombre: Selah (2026-10-31)
+- **Decisión:** usar "Selah" como nombre del producto.
+- **Motivo:** preferencia del autor; no se encontró otro proyecto de proyección para iglesias con ese nombre.
+- **Alternativas:** buscar otro nombre.
+- **Consecuencias / pendiente:** verificar marcas (USPTO, EUIPO, Italia), dominio y organización en GitHub. Es un nombre bíblico común y existen otras apps no relacionadas con ese nombre.
+
+## D-002 — Proyecto de código abierto, sin fin de lucro (2026-10-31)
+- **Decisión:** el proyecto es open source; el objetivo no es ganar dinero.
+- **Motivo:** decisión del autor.
+- **Consecuencias:** se elimina la pregunta "gratis/pago/suscripción". Las traducciones bíblicas con copyright siguen necesitando licencia aunque el código sea libre.
+
+## D-003 — Licencia del código: GPL-3.0 (2026-10-31)
+- **Decisión:** GPL-3.0.
+- **Motivo:** protege contra versiones cerradas derivadas; coincide con OpenLP (GPL-3.0+) y FreeShow (GPL-3.0), lo que permite reutilizar su código.
+- **Alternativas:** MIT/Apache-2.0 (permisivas), AGPL.
+- **Consecuencias:** todo código copiado debe conservar sus avisos de copyright y su origen se registra en docs/REUSE.md. Revisar compatibilidad de FFmpeg/GStreamer al empaquetar. Los datos (Biblias, fuentes, iconos, traducciones) tienen licencia propia, distinta del código.
+
+## D-004 — Equipo: proyecto personal (2026-10-31)
+- **Decisión:** un solo autor por ahora.
+- **Consecuencias:** CONTRIBUTING.md y código de conducta quedan para cuando se publique el repositorio. Los calendarios se calculan con una persona.
+
+## D-005 — Revisión de competencia antes de construir (2026-10-31)
+- **Decisión:** revisar FreeShow y OpenLP para reutilizar funcionalidades útiles antes de la Fase 0.
+- **Resultado inicial:** ver docs/COMPETITIVE-REVIEW.md.
+
+## D-006 — Plataformas: Windows, macOS y Linux (2026-10-31)
+- **Decisión:** soportar las tres desde el inicio. Windows por ser la más común en iglesias, macOS porque el autor la tiene y Linux porque es su entorno de desarrollo.
+- **Alternativas:** una sola plataforma prioritaria primero.
+- **Consecuencias:** las pruebas técnicas de la Fase 2 (monitores, cámara, video, stream) se repiten en las tres. Linux con Wayland y macOS con permisos de cámara/pantalla son riesgos conocidos. La firma de código y la notarización de macOS requieren cuenta de desarrollador de Apple (de pago); Windows requiere certificado o un servicio gratuito para open source. El calendario crece frente a una sola plataforma.
+
+## D-007 — Importar Biblias en el formato de Holyrics (2026-10-31)
+- **Decisión:** Selah debe poder importar Biblias en el formato que usa Holyrics, para aprovechar las que cada iglesia ya posee.
+- **Proceso:** el autor colocará muestras en samples/holyrics-bibles/ cuando las consiga; con ellas se identifica el formato y se prueba el importador. Esa carpeta está en .gitignore por posible copyright.
+- **Estado:** formato por confirmar. Fuentes de terceros hablan de archivos .xml y .bib en .zip; no hay documentación oficial verificada. Hace falta un archivo de muestra.
+- **Consecuencias:** se implementa como un adaptador más de la capa de proveedor de Biblia. Selah no incluye ni distribuye esas Biblias; solo lee las que el usuario ya tiene. No se usa código de Holyrics. Mostrar siempre licencia y atribución; si faltan metadatos, pedirlos al usuario.
+
+## D-008 — OBS como motor de stream, con detección e instalación asistida (2026-10-31)
+- **Decisión:** usar OBS controlado por obs-websocket (OBS 28 o superior). Selah detecta si OBS está instalado; si no, ofrece instalarlo con permiso explícito del usuario.
+- **Motivo:** OBS ya resuelve composición, codificación y emisión en las tres plataformas.
+- **Consecuencias:** descargar solo desde obsproject.com y comprobar hash. En Linux se muestran instrucciones en lugar de ejecutar sudo. Por verificar en Fase 2: activar WebSocket sin abrir OBS manualmente. Cámara del MVP: USB o capturadora.
+
+## D-009 — Teléfono como cámara: en el plan, fuera del MVP (2026-10-31)
+- **Decisión:** la función de usar un teléfono como cámara (servidor local con WebRTC) se mantiene en el plan del producto, pero no entra en el alcance del MVP.
+- **Motivo:** requiere HTTPS con certificado local, depende del Wi-Fi y es independiente del resto. Revisar la licencia de VDO.Ninja antes de reutilizarlo.
+- **Consecuencias:** el diseño de la capa de fuentes de video debe dejar espacio para una fuente remota sin rehacer lo demás.
+
+## D-010 — Tauri primero, con Electron como plan de respaldo (2026-10-31)
+- **Decisión:** construir con Tauri (Rust + webview del sistema). Si se bloquea un punto crítico, migrar a Electron.
+- **Motivo:** menor consumo de recursos y proyecto personal que tolera el riesgo. El frontend web se reutilizaría en la migración.
+- **Alternativas:** Electron desde el inicio (más predecible, más pesado); Qt (ligero, pero se pierde la reutilización de FreeShow).
+- **Consecuencias:** WebView2 en Windows (Chromium) y WebKit en macOS y Linux, así que hay que probar en dos familias de motores. El frontend debe hablar con el backend solo a través de una capa de adaptador propia, sin llamar a APIs de Tauri directamente, para que migrar sea barato. El backend en Rust no se reutiliza en Electron y habría que reescribirlo.
+- **Criterios para abandonar Tauri** (revisar en Fase 2): video que no reproduce de forma fiable en WebKit; pantalla completa en segundo monitor inestable en macOS o Linux; permisos o captura de cámara inviables; consumo no mejor que Electron al medirlo.
