@@ -1,8 +1,11 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window",
-  "windows": ["main"],
+  "description": "Permisos de la consola y de la ventana de salida",
+  "windows": [
+    "main",
+    "output"
+  ],
   "permissions": [
     "core:default",
     "opener:default"

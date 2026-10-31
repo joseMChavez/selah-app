@@ -31,3 +31,7 @@ lto = true
 opt-level = 3
 panic = "abort"
 strip = true
+
+# Acceso a GTK para pantalla completa en un monitor concreto (necesario en Wayland).
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"

@@ -1,156 +1,249 @@
 <script lang="ts">
-  import { invoke } from "@tauri-apps/api/core";
+  import { onMount } from "svelte";
+  import OutputView from "$lib/OutputView.svelte";
+  import { platform, type MonitorInfo, type OutputContent, type OutputState } from "$lib/platform";
 
-  let name = $state("");
-  let greetMsg = $state("");
+  const MONITOR_POLL_MS = 2000;
 
-  async function greet(event: Event) {
-    event.preventDefault();
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    greetMsg = await invoke("greet", { name });
+  let monitors = $state<MonitorInfo[]>([]);
+  let selectedIndex = $state<number | null>(null);
+  let output = $state<OutputState>({ open: false, monitorName: null, content: { kind: "empty" } });
+  let draft = $state("Porque donde están dos o tres congregados en mi nombre,\nallí estoy yo en medio de ellos.\n— Mateo 18:20");
+  let error = $state("");
+  let busy = $state(false);
+
+  let prepared = $derived<OutputContent>(draft.trim() ? { kind: "text", text: draft } : { kind: "empty" });
+  let selected = $derived(monitors.find((m) => m.index === selectedIndex) ?? null);
+  // Si el monitor de la salida desaparece, el compositor mueve la ventana a otro: hay que avisar.
+  let outputMonitorLost = $derived(
+    output.open && output.monitorName !== null && !monitors.some((m) => m.name === output.monitorName),
+  );
+
+  function describe(content: OutputContent): string {
+    switch (content.kind) {
+      case "empty": return "Nada (fondo negro sin contenido)";
+      case "black": return "Pantalla en negro";
+      case "testPattern": return "Patrón de prueba";
+      case "text": return "Texto";
+    }
   }
+
+  async function run(action: () => Promise<unknown>) {
+    busy = true;
+    error = "";
+    try {
+      await action();
+    } catch (e) {
+      error = String(e);
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function refreshMonitors() {
+    try {
+      monitors = await platform.listMonitors();
+    } catch (e) {
+      error = `No se pudieron leer los monitores: ${e}`;
+      return;
+    }
+    if (selectedIndex === null || !monitors.some((m) => m.index === selectedIndex)) {
+      // Por defecto, un monitor que no sea el principal: suele ser el proyector.
+      selectedIndex = (monitors.find((m) => !m.isPrimary && m.index > 0) ?? monitors.at(-1))?.index ?? null;
+    }
+  }
+
+  const openOutput = () => run(async () => {
+    if (selectedIndex !== null) output = await platform.openOutput(selectedIndex);
+  });
+  const closeOutput = () => run(() => platform.closeOutput());
+  const send = (content: OutputContent) => run(async () => {
+    output = await platform.setOutputContent(content);
+  });
+
+  onMount(() => {
+    refreshMonitors();
+    platform.getOutputState().then((state) => (output = state));
+    const unlisten = platform.onOutputState((state) => (output = state));
+    const timer = setInterval(refreshMonitors, MONITOR_POLL_MS);
+    return () => {
+      clearInterval(timer);
+      unlisten.then((fn) => fn());
+    };
+  });
 </script>
 
-<main class="container">
-  <h1>Welcome to Tauri + Svelte</h1>
+<main>
+  <header>
+    <h1>Selah · Proyección</h1>
+    <p class="status" class:live={output.open} role="status">
+      {#if output.open}
+        ● Salida abierta en <strong>{output.monitorName}</strong> · En pantalla: {describe(output.content)}
+      {:else}
+        ○ Salida cerrada
+      {/if}
+    </p>
+  </header>
 
-  <div class="row">
-    <a href="https://vite.dev" target="_blank">
-      <img src="/vite.svg" class="logo vite" alt="Vite Logo" />
-    </a>
-    <a href="https://tauri.app" target="_blank">
-      <img src="/tauri.svg" class="logo tauri" alt="Tauri Logo" />
-    </a>
-    <a href="https://svelte.dev" target="_blank">
-      <img src="/svelte.svg" class="logo svelte-kit" alt="SvelteKit Logo" />
-    </a>
+  {#if outputMonitorLost}
+    <p class="alert" role="alert">
+      El monitor «{output.monitorName}» ya no está conectado. La salida puede haberse movido a otra pantalla.
+      Elige un monitor y pulsa «Abrir salida» de nuevo.
+    </p>
+  {/if}
+  {#if error}<p class="alert" role="alert">{error}</p>{/if}
+
+  <section>
+    <h2>Monitor de salida</h2>
+    {#if monitors.length === 0}
+      <p>No se detectó ningún monitor.</p>
+    {:else}
+      <ul class="monitors">
+        {#each monitors as m (m.index)}
+          <li>
+            <label>
+              <input type="radio" name="monitor" value={m.index} bind:group={selectedIndex} />
+              <span>
+                <strong>{m.name}</strong>
+                {m.width}×{m.height} · escala {m.scale} · posición {m.x},{m.y}
+                {#if m.isPrimary}· principal{/if}
+                {#if output.open && m.name === output.monitorName}· <em>salida aquí</em>{/if}
+              </span>
+            </label>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+    <div class="actions">
+      <button onclick={openOutput} disabled={busy || selected === null}>
+        {output.open ? "Mover salida a" : "Abrir salida en"} {selected?.name ?? "…"}
+      </button>
+      <button onclick={closeOutput} disabled={busy || !output.open}>Cerrar salida</button>
+    </div>
+  </section>
+
+  <div class="threads">
+    <section>
+      <h2>Preparado <span class="tag">vista previa, no visible</span></h2>
+      <textarea bind:value={draft} rows="4" aria-label="Texto preparado"></textarea>
+      <div class="screen"><OutputView content={prepared} /></div>
+      <div class="actions">
+        <button class="primary" onclick={() => send(prepared)} disabled={busy}>Enviar a pantalla</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>En pantalla <span class="tag live">lo que ve la congregación</span></h2>
+      <div class="screen live"><OutputView content={output.content} /></div>
+      <div class="actions">
+        <button onclick={() => send({ kind: "black" })} disabled={busy}>Pantalla en negro</button>
+        <button onclick={() => send({ kind: "testPattern" })} disabled={busy}>Patrón de prueba</button>
+        <button onclick={() => send({ kind: "empty" })} disabled={busy}>Quitar contenido</button>
+      </div>
+    </section>
   </div>
-  <p>Click on the Tauri, Vite, and SvelteKit logos to learn more.</p>
-
-  <form class="row" onsubmit={greet}>
-    <input id="greet-input" placeholder="Enter a name..." bind:value={name} />
-    <button type="submit">Greet</button>
-  </form>
-  <p>{greetMsg}</p>
 </main>
 
 <style>
-.logo.vite:hover {
-  filter: drop-shadow(0 0 2em #747bff);
-}
-
-.logo.svelte-kit:hover {
-  filter: drop-shadow(0 0 2em #ff3e00);
-}
-
-:root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 400;
-
-  color: #0f0f0f;
-  background-color: #f6f6f6;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-text-size-adjust: 100%;
-}
-
-.container {
-  margin: 0;
-  padding-top: 10vh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  text-align: center;
-}
-
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: 0.75s;
-}
-
-.logo.tauri:hover {
-  filter: drop-shadow(0 0 2em #24c8db);
-}
-
-.row {
-  display: flex;
-  justify-content: center;
-}
-
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-
-a:hover {
-  color: #535bf2;
-}
-
-h1 {
-  text-align: center;
-}
-
-input,
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  color: #0f0f0f;
-  background-color: #ffffff;
-  transition: border-color 0.25s;
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
-}
-
-button {
-  cursor: pointer;
-}
-
-button:hover {
-  border-color: #396cd8;
-}
-button:active {
-  border-color: #396cd8;
-  background-color: #e8e8e8;
-}
-
-input,
-button {
-  outline: none;
-}
-
-#greet-input {
-  margin-right: 5px;
-}
-
-@media (prefers-color-scheme: dark) {
   :root {
-    color: #f6f6f6;
-    background-color: #2f2f2f;
+    --bg: #f4f4f5;
+    --panel: #ffffff;
+    --text: #18181b;
+    --muted: #52525b;
+    --border: #d4d4d8;
+    --accent: #2563eb;
+    --live: #dc2626;
+    --warn-bg: #fef3c7;
+    --warn-text: #78350f;
+    color-scheme: light dark;
   }
-
-  a:hover {
-    color: #24c8db;
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #18181b;
+      --panel: #27272a;
+      --text: #f4f4f5;
+      --muted: #a1a1aa;
+      --border: #3f3f46;
+      --accent: #3b82f6;
+      --live: #f87171;
+      --warn-bg: #451a03;
+      --warn-text: #fde68a;
+    }
   }
-
-  input,
+  :global(body) {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.4 system-ui, sans-serif;
+  }
+  main {
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  h1 { margin: 0; font-size: 20px; }
+  h2 { margin: 0 0 10px; font-size: 16px; }
+  .status { margin: 0; color: var(--muted); }
+  .status.live { color: var(--live); }
+  .alert {
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: var(--warn-bg);
+    color: var(--warn-text);
+  }
+  section {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+  }
+  .threads {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 14px;
+  }
+  .monitors { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; }
+  .monitors label { display: flex; gap: 8px; align-items: center; cursor: pointer; }
+  .tag { font-weight: normal; font-size: 13px; color: var(--muted); }
+  .tag.live { color: var(--live); }
+  textarea {
+    box-sizing: border-box;
+    width: 100%;
+    margin-bottom: 10px;
+    padding: 8px;
+    font: inherit;
+    color: inherit;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  .screen {
+    aspect-ratio: 16 / 9;
+    border: 2px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .screen.live { border-color: var(--live); }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
   button {
-    color: #ffffff;
-    background-color: #0f0f0f98;
+    min-height: 38px;
+    padding: 0 14px;
+    font: inherit;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
   }
-  button:active {
-    background-color: #0f0f0f69;
-  }
-}
-
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: 0.5; cursor: default; }
 </style>
