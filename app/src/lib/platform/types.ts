@@ -67,6 +67,42 @@ export interface MediaFile {
   kind: MediaKind;
 }
 
+export interface ObsDetection {
+  installed: boolean;
+  websocketEnabled: boolean;
+  running: boolean;
+}
+
+export interface ObsStatus {
+  obsVersion: string;
+  programScene: string | null;
+  /** Todas las escenas de OBS, en el orden de su ventana: las del usuario y las de Selah. */
+  scenes: string[];
+  /** Fuentes de texto de OBS que Selah puede rellenar. */
+  textSources: string[];
+  /** Las escenas de Selah existen en OBS. */
+  selahReady: boolean;
+  hasCamera: boolean;
+  streaming: {
+    active: boolean;
+    reconnecting: boolean;
+    durationMs: number;
+    congestion: number;
+    skippedFrames: number;
+    totalFrames: number;
+  };
+  /** La clave de emisión nunca sale de OBS: solo se indica si existe. */
+  destination: { kind: string; server: string; hasKey: boolean } | null;
+}
+
+/** Dónde quedó visible el texto al ponerlo en la emisión. */
+export type ObsTextShown = { kind: "current" } | { kind: "switched"; scene: string } | { kind: "notInScene" };
+
+export interface ObsCamera {
+  id: string;
+  name: string;
+}
+
 /** Error devuelto por el backend; la interfaz lo traduce al idioma elegido. */
 export type CommandError =
   | { code: "monitorDisconnected" }
@@ -74,6 +110,10 @@ export type CommandError =
   | { code: "invalidContent" }
   | { code: "invalidBible"; file: string; reason: string }
   | { code: "bibleNotFound" }
+  | { code: "obsNotInstalled" }
+  | { code: "obsRunning" }
+  | { code: "obsNotConnected" }
+  | { code: "obs"; message: string }
   | { code: "internal"; message: string };
 
 export interface OutputState {
@@ -108,4 +148,28 @@ export interface Platform {
   removeBible(id: string): Promise<void>;
   getChapter(bibleId: string, book: number, chapter: number): Promise<Verse[]>;
   searchBible(bibleId: string, query: string): Promise<SearchHit[]>;
+
+  // Transmisión con OBS
+  obsDetect(): Promise<ObsDetection>;
+  /** Activa el WebSocket de OBS en su configuración. Solo con OBS cerrado. */
+  obsEnableWebsocket(): Promise<void>;
+  obsLaunch(): Promise<void>;
+  obsConnect(): Promise<void>;
+  obsDisconnect(): Promise<void>;
+  obsStatus(): Promise<ObsStatus>;
+  /** Crea o completa las escenas de Selah en OBS. */
+  obsSetup(waitText: string): Promise<void>;
+  obsSetScene(scene: string): Promise<void>;
+  /** Escribe el texto en esa fuente de OBS y la hace visible en la emisión. */
+  obsShowText(source: string, text: string, credit: string): Promise<ObsTextShown>;
+  /** Oculta esa fuente de texto en la escena al aire. */
+  obsHideText(source: string): Promise<void>;
+  obsCameras(): Promise<ObsCamera[]>;
+  obsSetCamera(device: string): Promise<void>;
+  /** Imagen (data URL) de lo que sale en la emisión. */
+  obsPreview(): Promise<string | null>;
+  /** Clave vacía = conservar la que ya tiene OBS. */
+  obsSetDestination(server: string, key: string): Promise<void>;
+  obsStartStream(): Promise<void>;
+  obsStopStream(): Promise<void>;
 }

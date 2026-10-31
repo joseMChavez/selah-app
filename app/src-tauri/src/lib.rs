@@ -1,6 +1,7 @@
 // Consola + ventana de salida en un monitor elegido, medios y Biblias.
 // El backend guarda qué hay en pantalla para que la salida pueda recuperarlo si se recarga.
 mod bible;
+mod obs;
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -140,6 +141,11 @@ enum CommandError {
     InvalidContent,
     InvalidBible { file: String, reason: String },
     BibleNotFound,
+    ObsNotInstalled,
+    /// Hay que cerrar OBS para cambiar su configuración.
+    ObsRunning,
+    ObsNotConnected,
+    Obs { message: String },
     Internal { message: String },
 }
 
@@ -199,6 +205,22 @@ struct OutputState {
 struct AppState {
     output: Mutex<OutputState>,
     bibles: Mutex<bible::Library>,
+    /// Conexión con OBS; None si no hay. Mutex de tokio: se mantiene durante las peticiones.
+    obs: tauri::async_runtime::Mutex<Option<obws::Client>>,
+}
+
+impl From<obs::ObsError> for CommandError {
+    fn from(e: obs::ObsError) -> Self {
+        match e {
+            obs::ObsError::NotInstalled => CommandError::ObsNotInstalled,
+            obs::ObsError::Running => CommandError::ObsRunning,
+            obs::ObsError::Failed(message) => CommandError::Obs { message },
+        }
+    }
+}
+
+fn obs_failed(e: obws::error::Error) -> CommandError {
+    CommandError::Obs { message: e.to_string() }
 }
 
 fn bibles_dir(app: &AppHandle) -> Result<bible::BibleDirs, CommandError> {
@@ -435,6 +457,127 @@ async fn pick_media_folder(app: AppHandle, title: String) -> Result<Option<Vec<M
     Ok(Some(files))
 }
 
+// --- Transmisión con OBS ---
+
+#[tauri::command]
+async fn obs_detect() -> obs::Detection {
+    obs::detect()
+}
+
+#[tauri::command]
+async fn obs_enable_websocket() -> Result<(), CommandError> {
+    Ok(obs::enable_websocket()?)
+}
+
+#[tauri::command]
+async fn obs_launch() -> Result<(), CommandError> {
+    Ok(obs::launch()?)
+}
+
+#[tauri::command]
+async fn obs_connect(state: State<'_, AppState>) -> Result<(), CommandError> {
+    let client = obs::connect().await?;
+    *state.obs.lock().await = Some(client);
+    Ok(())
+}
+
+#[tauri::command]
+async fn obs_disconnect(state: State<'_, AppState>) -> Result<(), CommandError> {
+    if let Some(mut client) = state.obs.lock().await.take() {
+        client.disconnect().await;
+    }
+    Ok(())
+}
+
+/// Se consulta cada segundo. Si OBS no responde, se da la conexión por perdida.
+#[tauri::command]
+async fn obs_status(state: State<'_, AppState>) -> Result<obs::Status, CommandError> {
+    let mut guard = state.obs.lock().await;
+    let client = guard.as_ref().ok_or(CommandError::ObsNotConnected)?;
+    match obs::status(client).await {
+        Ok(status) => Ok(status),
+        Err(_) => {
+            *guard = None;
+            Err(CommandError::ObsNotConnected)
+        }
+    }
+}
+
+#[tauri::command]
+async fn obs_setup(state: State<'_, AppState>, wait_text: String) -> Result<(), CommandError> {
+    let guard = state.obs.lock().await;
+    let client = guard.as_ref().ok_or(CommandError::ObsNotConnected)?;
+    obs::setup(client, &wait_text).await.map_err(obs_failed)
+}
+
+#[tauri::command]
+async fn obs_set_scene(state: State<'_, AppState>, scene: String) -> Result<(), CommandError> {
+    let guard = state.obs.lock().await;
+    let client = guard.as_ref().ok_or(CommandError::ObsNotConnected)?;
+    obs::set_scene(client, &scene).await.map_err(obs_failed)
+}
+
+#[tauri::command]
+async fn obs_show_text(
+    state: State<'_, AppState>,
+    source: String,
+    text: String,
+    credit: String,
+) -> Result<obs::TextShown, CommandError> {
+    let guard = state.obs.lock().await;
+    let client = guard.as_ref().ok_or(CommandError::ObsNotConnected)?;
+    obs::show_text(client, &source, &text, &credit).await.map_err(obs_failed)
+}
+
+#[tauri::command]
+async fn obs_hide_text(state: State<'_, AppState>, source: String) -> Result<(), CommandError> {
+    let guard = state.obs.lock().await;
+    let client = guard.as_ref().ok_or(CommandError::ObsNotConnected)?;
+    obs::hide_text(client, &source).await.map_err(obs_failed)
+}
+
+#[tauri::command]
+async fn obs_cameras(state: State<'_, AppState>) -> Result<Vec<obs::Camera>, CommandError> {
+    let guard = state.obs.lock().await;
+    let client = guard.as_ref().ok_or(CommandError::ObsNotConnected)?;
+    obs::cameras(client).await.map_err(obs_failed)
+}
+
+#[tauri::command]
+async fn obs_set_camera(state: State<'_, AppState>, device: String) -> Result<(), CommandError> {
+    let guard = state.obs.lock().await;
+    let client = guard.as_ref().ok_or(CommandError::ObsNotConnected)?;
+    obs::set_camera(client, &device).await.map_err(obs_failed)
+}
+
+#[tauri::command]
+async fn obs_preview(state: State<'_, AppState>) -> Result<Option<String>, CommandError> {
+    let guard = state.obs.lock().await;
+    let client = guard.as_ref().ok_or(CommandError::ObsNotConnected)?;
+    obs::preview(client).await.map_err(obs_failed)
+}
+
+#[tauri::command]
+async fn obs_set_destination(state: State<'_, AppState>, server: String, key: String) -> Result<(), CommandError> {
+    let guard = state.obs.lock().await;
+    let client = guard.as_ref().ok_or(CommandError::ObsNotConnected)?;
+    obs::set_destination(client, &server, &key).await.map_err(obs_failed)
+}
+
+#[tauri::command]
+async fn obs_start_stream(state: State<'_, AppState>) -> Result<(), CommandError> {
+    let guard = state.obs.lock().await;
+    let client = guard.as_ref().ok_or(CommandError::ObsNotConnected)?;
+    client.streaming().start().await.map_err(obs_failed)
+}
+
+#[tauri::command]
+async fn obs_stop_stream(state: State<'_, AppState>) -> Result<(), CommandError> {
+    let guard = state.obs.lock().await;
+    let client = guard.as_ref().ok_or(CommandError::ObsNotConnected)?;
+    client.streaming().stop().await.map_err(obs_failed)
+}
+
 // Errores de la interfaz al registro de la app: sin esto, un fallo en el webview no deja rastro.
 #[tauri::command]
 fn log_client_error(window: tauri::Window, message: String) {
@@ -597,7 +740,23 @@ pub fn run() {
             import_bibles,
             remove_bible,
             get_chapter,
-            search_bible
+            search_bible,
+            obs_detect,
+            obs_enable_websocket,
+            obs_launch,
+            obs_connect,
+            obs_disconnect,
+            obs_status,
+            obs_setup,
+            obs_set_scene,
+            obs_show_text,
+            obs_hide_text,
+            obs_cameras,
+            obs_set_camera,
+            obs_preview,
+            obs_set_destination,
+            obs_start_stream,
+            obs_stop_stream
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
