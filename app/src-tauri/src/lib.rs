@@ -1,10 +1,15 @@
-// Prueba técnica 1 de la Fase 2: consola + ventana de salida en un monitor elegido.
+// Consola + ventana de salida en un monitor elegido, medios y Biblias.
 // El backend guarda qué hay en pantalla para que la salida pueda recuperarlo si se recarga.
+mod bible;
+
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, Monitor, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
+use tauri::{
+    AppHandle, Emitter, Manager, Monitor, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
+    WindowEvent,
+};
 use tauri_plugin_dialog::DialogExt;
 
 const MAIN_LABEL: &str = "main";
@@ -37,10 +42,84 @@ enum OutputContent {
     Black,
     TestPattern,
     /// Serie completa de diapositivas: la salida conserva una copia fija aunque el operador edite el texto preparado.
-    Text { slides: Vec<String>, index: usize },
-    Image { path: String },
-    Video { path: String, paused: bool },
-    Pdf { path: String, page: u32 },
+    Text {
+        slides: Vec<String>,
+        index: usize,
+    },
+    Image {
+        path: String,
+    },
+    Video {
+        path: String,
+        paused: bool,
+    },
+    Pdf {
+        path: String,
+        page: u32,
+    },
+    /// Pasaje bíblico, un versículo por diapositiva. El copyright viaja con el contenido para mostrarse siempre.
+    Scripture {
+        verses: Vec<ScriptureVerse>,
+        index: usize,
+        version: String,
+        copyright: String,
+    },
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ScriptureVerse {
+    reference: String,
+    text: String,
+}
+
+#[derive(Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum TextAlign {
+    Left,
+    #[default]
+    Center,
+    Right,
+}
+
+#[derive(Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum VerticalPosition {
+    Top,
+    #[default]
+    Middle,
+    Bottom,
+}
+
+#[derive(Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum Background {
+    #[default]
+    Black,
+    Navy,
+    Charcoal,
+}
+
+/// Cómo se coloca el texto en la pantalla. Se aplica a lo que está al aire en cuanto cambia.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct OutputStyle {
+    /// Tamaño máximo relativo; el texto se reduce solo si no cabe.
+    font_scale: f32,
+    align: TextAlign,
+    position: VerticalPosition,
+    background: Background,
+}
+
+impl Default for OutputStyle {
+    fn default() -> Self {
+        Self {
+            font_scale: 1.0,
+            align: TextAlign::Center,
+            position: VerticalPosition::Middle,
+            background: Background::Black,
+        }
+    }
 }
 
 impl OutputContent {
@@ -59,11 +138,15 @@ enum CommandError {
     MonitorDisconnected,
     FileMissing { path: String },
     InvalidContent,
+    InvalidBible { file: String, reason: String },
+    BibleNotFound,
     Internal { message: String },
 }
 
 fn internal(e: impl std::fmt::Display) -> CommandError {
-    CommandError::Internal { message: e.to_string() }
+    CommandError::Internal {
+        message: e.to_string(),
+    }
 }
 
 #[derive(Clone, Copy, Serialize)]
@@ -98,7 +181,9 @@ fn media_kind(path: &Path) -> Option<MediaKind> {
 
 // El protocolo asset empieza sin acceso a nada; solo se abren los archivos que el usuario elige.
 fn allow_media(app: &AppHandle, path: &Path) -> Result<(), CommandError> {
-    app.asset_protocol_scope().allow_file(path).map_err(internal)
+    app.asset_protocol_scope()
+        .allow_file(path)
+        .map_err(internal)
 }
 
 #[derive(Clone, Default, Serialize)]
@@ -107,18 +192,35 @@ struct OutputState {
     open: bool,
     monitor_name: Option<String>,
     content: OutputContent,
+    style: OutputStyle,
 }
 
 #[derive(Default)]
 struct AppState {
     output: Mutex<OutputState>,
+    bibles: Mutex<bible::Library>,
+}
+
+fn bibles_dir(app: &AppHandle) -> Result<bible::BibleDirs, CommandError> {
+    Ok(bible::BibleDirs {
+        // Si no hay carpeta de recursos (no debería pasar), se sigue solo con las importadas.
+        builtin: app.path().resource_dir().ok().map(|dir| dir.join("bibles")),
+        user: app.path().app_data_dir().map_err(internal)?.join("bibles"),
+    })
 }
 
 fn monitor_name(monitor: &Monitor, index: usize) -> String {
-    monitor.name().cloned().unwrap_or_else(|| format!("Monitor {}", index + 1))
+    monitor
+        .name()
+        .cloned()
+        .unwrap_or_else(|| format!("Monitor {}", index + 1))
 }
 
-fn publish(app: &AppHandle, state: &AppState, update: impl FnOnce(&mut OutputState)) -> OutputState {
+fn publish(
+    app: &AppHandle,
+    state: &AppState,
+    update: impl FnOnce(&mut OutputState),
+) -> OutputState {
     let mut output = state.output.lock().unwrap();
     update(&mut output);
     let snapshot = output.clone();
@@ -151,7 +253,11 @@ fn list_monitors(app: AppHandle) -> Result<Vec<MonitorInfo>, CommandError> {
 // En Wayland no se puede posicionar una ventana; GTK sí permite pedir pantalla completa en un monitor concreto.
 // El índice de GDK coincide con el de available_monitors() porque tao los enumera en el mismo orden.
 #[cfg(target_os = "linux")]
-fn place_fullscreen(window: &WebviewWindow, _monitor: &Monitor, index: usize) -> Result<(), CommandError> {
+fn place_fullscreen(
+    window: &WebviewWindow,
+    _monitor: &Monitor,
+    index: usize,
+) -> Result<(), CommandError> {
     let w = window.clone();
     window
         .run_on_main_thread(move || {
@@ -168,7 +274,11 @@ fn place_fullscreen(window: &WebviewWindow, _monitor: &Monitor, index: usize) ->
 }
 
 #[cfg(not(target_os = "linux"))]
-fn place_fullscreen(window: &WebviewWindow, monitor: &Monitor, _index: usize) -> Result<(), CommandError> {
+fn place_fullscreen(
+    window: &WebviewWindow,
+    monitor: &Monitor,
+    _index: usize,
+) -> Result<(), CommandError> {
     window.set_fullscreen(false).map_err(internal)?;
     window.set_position(*monitor.position()).map_err(internal)?;
     window.set_fullscreen(true).map_err(internal)?;
@@ -177,9 +287,15 @@ fn place_fullscreen(window: &WebviewWindow, monitor: &Monitor, _index: usize) ->
 
 // async: en Windows crear ventanas desde un comando síncrono puede bloquear el hilo principal.
 #[tauri::command]
-async fn open_output(app: AppHandle, state: State<'_, AppState>, monitor_index: usize) -> Result<OutputState, CommandError> {
+async fn open_output(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    monitor_index: usize,
+) -> Result<OutputState, CommandError> {
     let monitors = app.available_monitors().map_err(internal)?;
-    let monitor = monitors.get(monitor_index).ok_or(CommandError::MonitorDisconnected)?;
+    let monitor = monitors
+        .get(monitor_index)
+        .ok_or(CommandError::MonitorDisconnected)?;
 
     let window = match app.get_webview_window(OUTPUT_LABEL) {
         Some(window) => window,
@@ -210,16 +326,25 @@ fn close_output(app: AppHandle) -> Result<(), CommandError> {
 
 // Se comprueba antes de enviar para que un archivo borrado o movido no deje la pantalla en un estado roto.
 #[tauri::command]
-fn set_output_content(app: AppHandle, state: State<'_, AppState>, content: OutputContent) -> Result<OutputState, CommandError> {
-    if let OutputContent::Text { slides, index } = &content {
-        if *index >= slides.len() {
-            return Err(CommandError::InvalidContent);
-        }
+fn set_output_content(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    content: OutputContent,
+) -> Result<OutputState, CommandError> {
+    let deck_len = match &content {
+        OutputContent::Text { slides, index } => Some((slides.len(), *index)),
+        OutputContent::Scripture { verses, index, .. } => Some((verses.len(), *index)),
+        _ => None,
+    };
+    if deck_len.is_some_and(|(len, index)| index >= len) {
+        return Err(CommandError::InvalidContent);
     }
     if let Some(path) = content.media_path() {
         let path = Path::new(path);
         if !path.is_file() {
-            return Err(CommandError::FileMissing { path: path.display().to_string() });
+            return Err(CommandError::FileMissing {
+                path: path.display().to_string(),
+            });
         }
         allow_media(&app, path)?;
     }
@@ -228,7 +353,11 @@ fn set_output_content(app: AppHandle, state: State<'_, AppState>, content: Outpu
 
 #[tauri::command]
 // Título y filtro llegan traducidos desde la interfaz.
-async fn pick_media(app: AppHandle, title: String, filter_name: String) -> Result<Vec<MediaFile>, CommandError> {
+async fn pick_media(
+    app: AppHandle,
+    title: String,
+    filter_name: String,
+) -> Result<Vec<MediaFile>, CommandError> {
     let all: Vec<&str> = [IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, PDF_EXTENSIONS].concat();
     let Some(picked) = app
         .dialog()
@@ -243,10 +372,15 @@ async fn pick_media(app: AppHandle, title: String, filter_name: String) -> Resul
     let mut files = Vec::new();
     for file in picked {
         let path: PathBuf = file.into_path().map_err(internal)?;
-        let Some(kind) = media_kind(&path) else { continue };
+        let Some(kind) = media_kind(&path) else {
+            continue;
+        };
         allow_media(&app, &path)?;
         files.push(MediaFile {
-            name: path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+            name: path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default(),
             path: path.to_string_lossy().into_owned(),
             kind,
         });
@@ -254,10 +388,116 @@ async fn pick_media(app: AppHandle, title: String, filter_name: String) -> Resul
     Ok(files)
 }
 
+// Errores de la interfaz al registro de la app: sin esto, un fallo en el webview no deja rastro.
+#[tauri::command]
+fn log_client_error(window: tauri::Window, message: String) {
+    eprintln!("[interfaz:{}] {message}", window.label());
+}
+
+// Los comandos de Biblia son async para que leer los XML (varios MB) no congele la ventana.
+#[tauri::command]
+async fn list_bibles(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Vec<bible::BibleInfo>, CommandError> {
+    let dir = bibles_dir(&app)?;
+    Ok(state.bibles.lock().unwrap().list(&dir))
+}
+
+#[tauri::command]
+async fn import_bibles(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    title: String,
+    filter_name: String,
+) -> Result<Vec<bible::BibleInfo>, CommandError> {
+    let Some(picked) = app
+        .dialog()
+        .file()
+        .set_title(title)
+        .add_filter(filter_name, &["xml"])
+        .blocking_pick_files()
+    else {
+        return Ok(Vec::new());
+    };
+    let dir = bibles_dir(&app)?;
+    let mut imported = Vec::new();
+    for file in picked {
+        let path = file.into_path().map_err(internal)?;
+        let info = state
+            .bibles
+            .lock()
+            .unwrap()
+            .import(&dir, &path)
+            .map_err(|reason| CommandError::InvalidBible {
+                file: path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default(),
+                reason,
+            })?;
+        imported.push(info);
+    }
+    Ok(imported)
+}
+
+#[tauri::command]
+async fn remove_bible(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<(), CommandError> {
+    let dir = bibles_dir(&app)?;
+    state
+        .bibles
+        .lock()
+        .unwrap()
+        .remove(&dir, &id)
+        .map_err(internal)
+}
+
+#[tauri::command]
+async fn get_chapter(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    bible_id: String,
+    book: u32,
+    chapter: u32,
+) -> Result<Vec<bible::Verse>, CommandError> {
+    let dir = bibles_dir(&app)?;
+    state
+        .bibles
+        .lock()
+        .unwrap()
+        .chapter(&dir, &bible_id, book, chapter)
+        .ok_or(CommandError::BibleNotFound)
+}
+
+#[tauri::command]
+async fn search_bible(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    bible_id: String,
+    query: String,
+) -> Result<Vec<bible::SearchHit>, CommandError> {
+    let dir = bibles_dir(&app)?;
+    state
+        .bibles
+        .lock()
+        .unwrap()
+        .search(&dir, &bible_id, &query)
+        .ok_or(CommandError::BibleNotFound)
+}
+
 // La salida informa de archivos que no puede mostrar (formato no soportado, códec ausente).
 #[tauri::command]
 fn report_output_error(app: AppHandle, message: String) {
     let _ = app.emit(OUTPUT_ERROR_EVENT, message);
+}
+
+#[tauri::command]
+fn set_output_style(app: AppHandle, state: State<'_, AppState>, style: OutputStyle) -> OutputState {
+    publish(&app, &state, |output| output.style = style)
 }
 
 #[tauri::command]
@@ -271,6 +511,16 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
+        .setup(|app| {
+            // Las Biblias se leen en segundo plano al arrancar, para que estén listas al abrir el panel.
+            let handle = app.handle().clone();
+            std::thread::spawn(move || {
+                if let Ok(dirs) = bibles_dir(&handle) {
+                    handle.state::<AppState>().bibles.lock().unwrap().ensure_loaded(&dirs);
+                }
+            });
+            Ok(())
+        })
         .on_window_event(|window, event| {
             let app = window.app_handle();
             match (window.label(), event) {
@@ -291,8 +541,15 @@ pub fn run() {
             close_output,
             set_output_content,
             get_output_state,
+            set_output_style,
             pick_media,
-            report_output_error
+            report_output_error,
+            log_client_error,
+            list_bibles,
+            import_bibles,
+            remove_bible,
+            get_chapter,
+            search_bible
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

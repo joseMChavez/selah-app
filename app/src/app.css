@@ -1,0 +1,155 @@
+/* Estilos de la consola. Pensados para usarse durante horas y con poca luz:
+   el oscuro no usa negro puro ni blanco puro, el claro es cálido, y el contraste del texto supera 7:1. */
+:root {
+  --bg: #f4f2ed;
+  --surface: #fdfcf9;
+  --surface-2: #efece5;
+  --text: #22252a;
+  --muted: #5d636c;
+  --border: #d9d5cc;
+  --accent: #2c62c9;
+  --accent-text: #ffffff;
+  --accent-soft: #dfe8fa;
+  --live: #c23a33;
+  --live-soft: #f8e1df;
+  --ok: #23845f;
+  --warn-bg: #fbefd2;
+  --warn-text: #6b4709;
+  --focus: #2c62c9;
+  --radius: 10px;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 2px 8px rgb(0 0 0 / 0.04);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121418;
+    --surface: #1a1d22;
+    --surface-2: #23272e;
+    --text: #e3e5e8;
+    --muted: #9ba1ab;
+    --border: #2f343c;
+    --accent: #6b9cf0;
+    --accent-text: #0f1a2e;
+    --accent-soft: #1f2d45;
+    --live: #ef6b63;
+    --live-soft: #3a2224;
+    --ok: #52c79a;
+    --warn-bg: #3b2e14;
+    --warn-text: #f3d48f;
+    --focus: #8ab2f5;
+    --shadow: none;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #121418;
+  --surface: #1a1d22;
+  --surface-2: #23272e;
+  --text: #e3e5e8;
+  --muted: #9ba1ab;
+  --border: #2f343c;
+  --accent: #6b9cf0;
+  --accent-text: #0f1a2e;
+  --accent-soft: #1f2d45;
+  --live: #ef6b63;
+  --live-soft: #3a2224;
+  --ok: #52c79a;
+  --warn-bg: #3b2e14;
+  --warn-text: #f3d48f;
+  --focus: #8ab2f5;
+  --shadow: none;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.45 "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 { margin: 0; font-weight: 650; }
+p { margin: 0; }
+
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  min-width: 0;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 14px;
+  font: inherit;
+  font-weight: 550;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.12s, border-color 0.12s;
+}
+.btn:hover:not(:disabled) { border-color: var(--muted); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.btn.primary:hover:not(:disabled) { filter: brightness(1.06); }
+.btn.danger { background: var(--live); border-color: var(--live); color: #fff; }
+.btn.big { min-height: 48px; font-size: 16px; padding: 0 18px; }
+.btn.ghost { background: transparent; }
+.btn.active { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
+
+.field {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.field:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+select.field { cursor: pointer; }
+
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+
+.segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.segmented button {
+  min-height: 34px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 0;
+  border-right: 1px solid var(--border);
+  cursor: pointer;
+}
+.segmented button:last-child { border-right: 0; }
+.segmented button[aria-pressed="true"],
+.segmented button[aria-selected="true"] { background: var(--accent); color: var(--accent-text); }
+
+.screen {
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid var(--border);
+  background: #000;
+}
+.screen.live { border-color: var(--live); }
