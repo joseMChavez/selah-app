@@ -54,8 +54,8 @@ jobs:
         if: matrix.name == 'linux'
         run: |
           sudo apt-get update
+          # Sin libgstreamer1.0-dev: en ubuntu-22.04 choca con libunwind (v0.2.2). Basta con los plugins.
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf \
-            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
             gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav
 
       - uses: actions/setup-node@v4
