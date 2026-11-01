@@ -10,18 +10,18 @@ Los instaladores se compilan en GitHub Actions (`.github/workflows/instaladores.
 
 ## Pasos
 
-1. Desde `main`, con todo fusionado, cambia la versión en los tres archivos:
-   - `app/src-tauri/tauri.conf.json` → `"version"`
-   - `app/src-tauri/Cargo.toml` → `version`
-   - `app/package.json` → `"version"`
-2. Haz commit del cambio de versión y fusiónalo en `main`.
-3. Crea y sube la etiqueta, que debe coincidir con la versión:
+1. Con todo fusionado en `main`, crea y sube la etiqueta con la forma `vX.Y.Z`:
    ```sh
-   git tag v0.2.0
-   git push origin v0.2.0
+   git switch main && git pull
+   git tag v0.2.2
+   git push origin v0.2.2
    ```
-4. Actions compila los tres sistemas (unos 15–25 min) y deja un **borrador** en Releases. Si la etiqueta no coincide con la versión, falla al principio.
-5. Revisa el borrador, prueba al menos un instalador y pulsa **Publish release**.
+   Los instaladores toman la versión de la etiqueta (`v0.2.2` → `0.2.2`); no hace falta cambiar ningún archivo.
+2. Actions compila los tres sistemas (unos 15–25 min) y deja un **borrador** en Releases. Si la etiqueta no tiene la forma `vX.Y.Z`, falla al principio.
+3. Revisa el borrador, prueba al menos un instalador y pulsa **Publish release**.
+4. Opcional: para que la versión del código coincida, actualízala en `app/src-tauri/tauri.conf.json`, `app/src-tauri/Cargo.toml` y `app/package.json` en un PR. Solo afecta a las compilaciones locales.
+
+Una etiqueta compila el código del commit al que apunta. Si una versión falla y hay que corregir algo, sube la siguiente etiqueta (`v0.2.3`) desde el `main` corregido.
 
 ## Compilar sin publicar
 
