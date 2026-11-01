@@ -47,4 +47,5 @@ Los instaladores no están firmados:
 |---|---|---|
 | `v0.2.0` | ❌ Fallida | El código seguía en `0.1.0` y el flujo exigía que la etiqueta coincidiera con la versión de los archivos. No compiló nada. |
 | `v0.2.1` | ❌ Fallida | La misma causa. Aprendizaje: el flujo pasó a tomar la versión de la etiqueta (PR #5). |
-| `v0.2.2` | Pendiente | Primera versión con instaladores para los tres sistemas. |
+| `v0.2.2` | ⚠️ Parcial | Windows y macOS compilaron; Linux falló al instalar dependencias: `libgstreamer1.0-dev` choca con libunwind en ubuntu-22.04. Aprendizaje: instalar solo los paquetes necesarios (PR #6). Queda un borrador sin instalador de Linux. |
+| `v0.2.3` | Pendiente | Primera versión con instaladores para los tres sistemas. |
