@@ -40,3 +40,11 @@ Los instaladores no están firmados:
 - **Windows:** SmartScreen dice «Windows protegió su PC» → «Más información» → «Ejecutar de todas formas».
 - **macOS:** clic derecho sobre Selah en Aplicaciones → «Abrir» → «Abrir». Si dice que está dañado: `xattr -cr /Applications/Selah.app`.
 - **Linux:** el AppImage necesita permiso de ejecución (`chmod +x Selah_*.AppImage`).
+
+## Historial
+
+| Etiqueta | Resultado | Qué pasó |
+|---|---|---|
+| `v0.2.0` | ❌ Fallida | El código seguía en `0.1.0` y el flujo exigía que la etiqueta coincidiera con la versión de los archivos. No compiló nada. |
+| `v0.2.1` | ❌ Fallida | La misma causa. Aprendizaje: el flujo pasó a tomar la versión de la etiqueta (PR #5). |
+| `v0.2.2` | Pendiente | Primera versión con instaladores para los tres sistemas. |
