@@ -37,7 +37,7 @@
     }
   }
 
-  // Una presentación se muestra como el PDF que LibreOffice hace de ella (diapositiva = página).
+  // Una presentación se muestra como el PDF que hace de ella PowerPoint, Keynote o LibreOffice (diapositiva = página).
   async function preparePresentation(file: MediaFile) {
     let pdf = converted[file.path];
     if (!pdf) {
