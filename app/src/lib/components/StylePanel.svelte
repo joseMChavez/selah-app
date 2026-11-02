@@ -2,7 +2,7 @@
   import { FONTS } from "$lib/fonts";
   import { t, type MessageKey } from "$lib/i18n/index.svelte";
   import { toMessage, type Message } from "$lib/messages";
-  import { platform, type FontId, type OutputStyle } from "$lib/platform";
+  import { platform, type Corner, type FontId, type LogoStyle, type OutputStyle } from "$lib/platform";
 
   let {
     style,
@@ -29,6 +29,38 @@
     { value: "navy", label: "bg.navy", color: "#0b1730" },
     { value: "charcoal", label: "bg.charcoal", color: "#1d1f22" },
   ];
+
+  // Un logo en cada esquina; las flechas indican hacia dónde va.
+  const corners: { value: Corner; label: MessageKey; arrow: string }[] = [
+    { value: "topLeft", label: "logo.topLeft", arrow: "↖" },
+    { value: "topRight", label: "logo.topRight", arrow: "↗" },
+    { value: "bottomLeft", label: "logo.bottomLeft", arrow: "↙" },
+    { value: "bottomRight", label: "logo.bottomRight", arrow: "↘" },
+  ];
+  const sizes: { value: LogoStyle["size"]; label: MessageKey }[] = [
+    { value: "small", label: "logo.small" },
+    { value: "medium", label: "logo.medium" },
+    { value: "large", label: "logo.large" },
+  ];
+  const opacities: { value: number; label: MessageKey }[] = [
+    { value: 0.35, label: "logo.soft" },
+    { value: 0.6, label: "logo.halfway" },
+    { value: 1, label: "logo.solid" },
+  ];
+
+  function changeLogo(change: Partial<LogoStyle>) {
+    onchange({ ...style, logo: { ...style.logo, ...change } });
+  }
+
+  async function pickLogo() {
+    try {
+      const path = await platform.pickBackground(t("logo.dialogTitle"), t("logo.dialogFilter"));
+      if (path) changeLogo({ image: path });
+    } catch (e) {
+      onerror(toMessage(e));
+      platform.logError(`logo: no se pudo elegir: ${JSON.stringify(e)}`).catch(() => {});
+    }
+  }
 
   async function pickImage() {
     try {
@@ -116,6 +148,49 @@
     </div>
   {/if}
   <p class="muted small">{t("background.hint")}</p>
+
+  <div class="logo-block">
+    <div class="row">
+      <span class="label">{t("logo.title")}</span>
+      <div class="swatches">
+        {#if style.logo.image}
+          <span class="muted small name" title={style.logo.image}>{baseName(style.logo.image)}</span>
+          <button class="btn ghost" onclick={() => changeLogo({ image: null })}>{t("background.remove")}</button>
+        {/if}
+        <button class="swatch" onclick={pickLogo}>
+          {#if style.logo.image}<img class="dot" src={platform.mediaUrl(style.logo.image)} alt="" />{/if}
+          {t(style.logo.image ? "logo.change" : "logo.pick")}
+        </button>
+      </div>
+    </div>
+    {#if style.logo.image}
+      <div class="row">
+        <span class="label">{t("logo.corner")}</span>
+        <div class="segmented">
+          {#each corners as c (c.value)}
+            <button aria-pressed={style.logo.corner === c.value} title={t(c.label)} aria-label={t(c.label)} onclick={() => changeLogo({ corner: c.value })}>{c.arrow}</button>
+          {/each}
+        </div>
+      </div>
+      <div class="row">
+        <span class="label">{t("logo.size")}</span>
+        <div class="segmented">
+          {#each sizes as z (z.value)}
+            <button aria-pressed={style.logo.size === z.value} onclick={() => changeLogo({ size: z.value })}>{t(z.label)}</button>
+          {/each}
+        </div>
+      </div>
+      <div class="row">
+        <span class="label">{t("logo.opacity")}</span>
+        <div class="segmented">
+          {#each opacities as o (o.value)}
+            <button aria-pressed={style.logo.opacity === o.value} onclick={() => changeLogo({ opacity: o.value })}>{t(o.label)}</button>
+          {/each}
+        </div>
+      </div>
+    {/if}
+    <p class="muted small">{t("logo.hint")}</p>
+  </div>
 </div>
 
 <style>
@@ -143,6 +218,7 @@
   .field.compact { width: auto; min-height: 36px; padding: 4px 8px; }
   img.dot { object-fit: cover; }
   .current { justify-content: flex-end; }
+  .logo-block { display: flex; flex-direction: column; gap: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
   .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dot { width: 16px; height: 16px; border-radius: 50%; border: 1px solid rgb(255 255 255 / 0.35); }
 </style>

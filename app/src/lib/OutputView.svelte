@@ -8,7 +8,11 @@
     background: "black",
     font: "system",
     backgroundImage: null,
+    logo: { image: null, corner: "topRight", size: "medium", opacity: 0.6 },
   };
+
+  /** Alto del logo según el tamaño elegido, en % del alto de la pantalla. */
+  const LOGO_HEIGHT: Record<OutputStyle["logo"]["size"], number> = { small: 8, medium: 12, large: 18 };
 
   const BACKGROUNDS: Record<OutputStyle["background"], string> = {
     black: "#000000",
@@ -86,6 +90,11 @@
 
   // La imagen de fondo va detrás del texto, la Biblia y el reloj, y queda sola al quitar el contenido.
   // Una letra puede traer la suya.
+  // El logo va encima de todo menos de la pantalla en negro y del patrón de prueba.
+  let logo = $derived(
+    style.logo?.image && content.kind !== "black" && content.kind !== "testPattern" ? platform.mediaUrl(style.logo.image) : null,
+  );
+
   let backdrop = $derived.by(() => {
     if (!lyric && !clock && content.kind !== "empty") return null;
     const path = (content.kind === "text" && content.background) || style.backgroundImage;
@@ -148,6 +157,7 @@
   class:preview
   class:pattern={content.kind === "testPattern"}
   class:expired={clock?.expired}
+  class:logo-bottom={logo !== null && style.logo.corner.startsWith("bottom")}
   style:background-color={BACKGROUNDS[style.background]}
   style:font-family={fontFamily(style.font)}
   bind:clientWidth={width}
@@ -194,6 +204,16 @@
     <div class="corner br"></div>
     <p class="pattern-title">{t("pattern.title")}</p>
     {#if diagnostics}<p class="diag">{diagnostics}</p>{/if}
+  {/if}
+  {#if logo}
+    <img
+      class="logo {style.logo.corner}"
+      src={logo}
+      alt=""
+      style:height="{LOGO_HEIGHT[style.logo.size]}cqh"
+      style:opacity={style.logo.opacity}
+      onerror={() => onerror?.(t("error.image", { name: style.logo.image?.split(/[\\/]/).pop() ?? "" }))}
+    />
   {/if}
 </div>
 
@@ -260,6 +280,21 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
+  /* Marca de agua: encima de cualquier contenido, en una esquina, sin tapar el texto (que deja un 6 % de margen). */
+  .logo {
+    position: absolute;
+    z-index: 2;
+    width: auto;
+    max-width: 22cqw;
+    object-fit: contain;
+    pointer-events: none;
+  }
+  /* Con el logo abajo, el copyright se estrecha para no quedar debajo del logo. */
+  .view.logo-bottom .copyright { left: 26cqw; right: 26cqw; }
+  .logo.topLeft { top: 3cqh; left: 2.5cqw; }
+  .logo.topRight { top: 3cqh; right: 2.5cqw; }
+  .logo.bottomLeft { bottom: 3cqh; left: 2.5cqw; }
+  .logo.bottomRight { bottom: 3cqh; right: 2.5cqw; }
   .backdrop {
     position: absolute;
     inset: 0;

@@ -160,6 +160,43 @@ enum Font {
     Merriweather,
 }
 
+#[derive(Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum Corner {
+    TopLeft,
+    #[default]
+    TopRight,
+    BottomLeft,
+    BottomRight,
+}
+
+#[derive(Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum LogoSize {
+    Small,
+    #[default]
+    Medium,
+    Large,
+}
+
+/// Logo o emblema de la iglesia, como marca de agua en una esquina de la pantalla.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+struct Logo {
+    /// None = sin logo.
+    image: Option<String>,
+    corner: Corner,
+    size: LogoSize,
+    /// 0..1; como marca de agua, por defecto semitransparente.
+    opacity: f64,
+}
+
+impl Default for Logo {
+    fn default() -> Self {
+        Self { image: None, corner: Corner::TopRight, size: LogoSize::Medium, opacity: 0.6 }
+    }
+}
+
 /// Cómo se coloca el texto en la pantalla. Se aplica a lo que está al aire en cuanto cambia.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -174,6 +211,8 @@ struct OutputStyle {
     /// Imagen o GIF detrás del texto, la Biblia y el reloj.
     #[serde(default)]
     background_image: Option<String>,
+    #[serde(default)]
+    logo: Logo,
 }
 
 impl Default for OutputStyle {
@@ -185,6 +224,7 @@ impl Default for OutputStyle {
             background: Background::Black,
             font: Font::System,
             background_image: None,
+            logo: Logo::default(),
         }
     }
 }
@@ -805,13 +845,16 @@ fn output_navigate(app: AppHandle, forward: bool) {
 
 #[tauri::command]
 fn set_output_style(app: AppHandle, state: State<'_, AppState>, mut style: OutputStyle) -> OutputState {
-    // Un fondo que ya no existe (archivo movido, otro equipo) se quita en vez de dejar la pantalla rota.
-    if let Some(path) = style.background_image.as_deref() {
-        let path = Path::new(path);
-        if !path.is_file() || allow_media(&app, path).is_err() {
-            style.background_image = None;
+    // Un fondo o un logo que ya no existe (archivo movido, otro equipo) se quita en vez de dejar la pantalla rota.
+    for image in [&mut style.background_image, &mut style.logo.image] {
+        if let Some(path) = image.as_deref() {
+            let path = Path::new(path);
+            if !path.is_file() || allow_media(&app, path).is_err() {
+                *image = None;
+            }
         }
     }
+    style.logo.opacity = style.logo.opacity.clamp(0.1, 1.0);
     publish(&app, &state, |output| output.style = style)
 }
 
@@ -952,6 +995,21 @@ fn get_output_state(state: State<'_, AppState>) -> OutputState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn estilo_con_y_sin_logo() {
+        // Un estilo guardado antes de que existiera el logo sigue valiendo: sin logo, esquina superior derecha.
+        let old: OutputStyle = serde_json::from_str(
+            r#"{"fontScale":1.1,"align":"center","position":"middle","background":"black","font":"system","backgroundImage":null}"#,
+        )
+        .unwrap();
+        assert!(old.logo.image.is_none());
+        assert!(matches!(old.logo.corner, Corner::TopRight));
+
+        let json = r#"{"fontScale":1.5,"align":"left","position":"top","background":"navy","font":"oswald","backgroundImage":null,"logo":{"image":"/x/logo.png","corner":"bottomRight","size":"large","opacity":0.4}}"#;
+        let style: OutputStyle = serde_json::from_str(json).unwrap();
+        assert_eq!(serde_json::to_value(&style).unwrap(), serde_json::from_str::<serde_json::Value>(json).unwrap());
+    }
 
     // Los contenidos llegan de la interfaz en camelCase: un campo mal nombrado solo falla al enviarlo.
     #[test]

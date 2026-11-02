@@ -235,7 +235,8 @@
     platform.getOutputState().then((state) => {
       output = state;
       // El estilo elegido la última vez se aplica al arrancar.
-      if (settings.outputStyle) changeStyle({ ...DEFAULT_STYLE, ...settings.outputStyle });
+      const saved = settings.outputStyle;
+      if (saved) changeStyle({ ...DEFAULT_STYLE, ...saved, logo: { ...DEFAULT_STYLE.logo, ...saved.logo } });
     });
     const unlisten = platform.onOutputState((state) => (output = state));
     const unlistenError = platform.onOutputError((message) => (error = { key: "error.fromOutput", params: { message } }));

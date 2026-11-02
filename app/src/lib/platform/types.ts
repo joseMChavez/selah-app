@@ -58,6 +58,19 @@ export interface OutputStyle {
   font: FontId;
   /** Imagen o GIF detrás del texto, la Biblia y el reloj. */
   backgroundImage: string | null;
+  logo: LogoStyle;
+}
+
+export type Corner = "topLeft" | "topRight" | "bottomLeft" | "bottomRight";
+
+/** Logo o emblema como marca de agua en una esquina de la pantalla. */
+export interface LogoStyle {
+  /** null = sin logo. */
+  image: string | null;
+  corner: Corner;
+  size: "small" | "medium" | "large";
+  /** 0..1 */
+  opacity: number;
 }
 
 export interface BibleInfo {
