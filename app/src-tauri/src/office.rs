@@ -36,10 +36,12 @@ try {
 }
 "#;
 
-/// AppleScript: las rutas llegan como argumentos (argv).
+/// AppleScript: las rutas llegan como argumentos (argv). Keynote y PowerPoint están en sandbox: el archivo
+/// se resuelve como alias fuera del «tell», así el sistema les da permiso para abrirlo; con la ruta convertida
+/// dentro del «tell», Keynote respondía que no podía abrir el archivo.
 const POWERPOINT_MAC_SCRIPT: &[&str] = &[
     "on run argv",
-    "set origen to POSIX file (item 1 of argv)",
+    "set origen to (POSIX file (item 1 of argv)) as alias",
     "set destino to (POSIX file (item 2 of argv)) as string",
     "tell application \"Microsoft PowerPoint\"",
     "open origen",
@@ -52,9 +54,11 @@ const POWERPOINT_MAC_SCRIPT: &[&str] = &[
 
 const KEYNOTE_SCRIPT: &[&str] = &[
     "on run argv",
+    "set origen to (POSIX file (item 1 of argv)) as alias",
+    "set destino to POSIX file (item 2 of argv)",
     "tell application \"Keynote\"",
-    "set doc to open (POSIX file (item 1 of argv))",
-    "export doc to (POSIX file (item 2 of argv)) as PDF",
+    "set doc to open origen",
+    "export doc to destino as PDF",
     "close doc saving no",
     "end tell",
     "end run",
