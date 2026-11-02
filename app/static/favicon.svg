@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Icono de Selah: una S que es a la vez una persona leyendo, dentro de un círculo.
+       Plano y en tres tintas (azul noche, crema, dorado) para leerse incluso a 16 px.
+       Fuente de todos los tamaños: npx tauri icon (ver docs/RELEASES.md). -->
+  <defs>
+    <path id="libro" d="M -9 0 C -41 -22 -83 -22 -118 -8 L -118 74 C -83 60 -41 60 -9 82 Z M 9 0 C 41 -22 83 -22 118 -8 L 118 74 C 83 60 41 60 9 82 Z"/>
+  </defs>
+  <circle cx="512" cy="512" r="496" fill="#1c3b7a"/>
+  <g transform="translate(-14 14)">
+    <!-- Cuerpo: hombros inclinados hacia el libro, brazos (tramo central) y regazo -->
+    <path d="M 548 318 C 470 262 330 282 330 392 C 330 492 470 508 556 540 C 656 578 676 690 604 748 C 530 806 396 790 330 736"
+          fill="none" stroke="#f6efe0" stroke-width="108" stroke-linecap="round"/>
+    <!-- Cabeza, separada del hombro y mirando al libro -->
+    <circle cx="676" cy="232" r="76" fill="#f6efe0"/>
+    <!-- Libro abierto apoyado en los brazos; el contorno del color del fondo lo separa del cuerpo -->
+    <g transform="translate(712 452) rotate(-20) scale(1.25)">
+      <use href="#libro" fill="#1c3b7a" stroke="#1c3b7a" stroke-width="32" stroke-linejoin="round"/>
+      <use href="#libro" fill="#f2b84b" stroke="#f2b84b" stroke-width="8" stroke-linejoin="round"/>
+    </g>
+  </g>
+</svg>
