@@ -1,7 +1,11 @@
 // Consola + ventana de salida en un monitor elegido, medios y Biblias.
 // El backend guarda qué hay en pantalla para que la salida pueda recuperarlo si se recarga.
+// Ajustes, letras y lista del culto viven en una base SQLite local (store.rs).
 mod bible;
 mod obs;
+mod office;
+mod picker;
+mod store;
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -11,12 +15,15 @@ use tauri::{
     AppHandle, Emitter, Manager, Monitor, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
     WindowEvent,
 };
-use tauri_plugin_dialog::DialogExt;
 
-const MAIN_LABEL: &str = "main";
+pub(crate) const MAIN_LABEL: &str = "main";
 const OUTPUT_LABEL: &str = "output";
 const OUTPUT_STATE_EVENT: &str = "output-state";
 const OUTPUT_ERROR_EVENT: &str = "output-error";
+/// Teclas de avance pulsadas en la ventana de salida: las aplica la consola, que sabe qué hay en pantalla.
+const OUTPUT_NAVIGATE_EVENT: &str = "output-navigate";
+/// Lleva todos los ajustes tras cada cambio: así la ventana de salida sigue el idioma de la consola.
+const SETTINGS_EVENT: &str = "settings-changed";
 
 const IMAGE_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png", "webp", "gif", "bmp", "svg", "avif"];
 const VIDEO_EXTENSIONS: &[&str] = &["mp4", "m4v", "mov", "webm", "mkv", "ogv"];
@@ -36,7 +43,8 @@ struct MonitorInfo {
 }
 
 #[derive(Clone, Default, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
+// rename_all solo cambia el nombre de las variantes; rename_all_fields, el de sus campos (duration_ms → durationMs).
+#[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
 enum OutputContent {
     #[default]
     Empty,
@@ -46,6 +54,12 @@ enum OutputContent {
     Text {
         slides: Vec<String>,
         index: usize,
+        /// Autoría de una letra (cantante, escritor); se muestra en la primera diapositiva.
+        #[serde(default)]
+        credit: String,
+        /// Imagen o GIF propio de esta letra; tapa el fondo general.
+        #[serde(default)]
+        background: Option<String>,
     },
     Image {
         path: String,
@@ -64,12 +78,44 @@ enum OutputContent {
         index: usize,
         version: String,
         copyright: String,
+        /// Segunda versión, debajo de la primera (por ejemplo, en otro idioma). Como mucho dos.
+        #[serde(default)]
+        second: Option<SecondVersion>,
+    },
+    /// Hora actual; la dibuja la salida con su propio reloj.
+    Clock {
+        hour12: bool,
+        seconds: bool,
+    },
+    /// Cuenta atrás. En marcha si ends_at (ms desde 1970) tiene valor; en pausa guarda lo que queda.
+    /// Al llegar a cero sigue contando el tiempo excedido con el fondo en rojo.
+    Timer {
+        duration_ms: u64,
+        ends_at: Option<u64>,
+        remaining_ms: i64,
     },
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct SecondVersion {
+    version: String,
+    copyright: String,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ScriptureVerse {
+    reference: String,
+    text: String,
+    /// El mismo versículo en la segunda versión; None si esa versión no lo tiene.
+    #[serde(default)]
+    second: Option<ParallelVerse>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ParallelVerse {
     reference: String,
     text: String,
 }
@@ -101,6 +147,56 @@ enum Background {
     Charcoal,
 }
 
+/// Tipos de letra incluidos en la app (no dependen de las fuentes instaladas en cada equipo).
+#[derive(Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum Font {
+    #[default]
+    System,
+    Montserrat,
+    Oswald,
+    BebasNeue,
+    Lora,
+    Merriweather,
+}
+
+#[derive(Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum Corner {
+    TopLeft,
+    #[default]
+    TopRight,
+    BottomLeft,
+    BottomRight,
+}
+
+#[derive(Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum LogoSize {
+    Small,
+    #[default]
+    Medium,
+    Large,
+}
+
+/// Logo o emblema de la iglesia, como marca de agua en una esquina de la pantalla.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+struct Logo {
+    /// None = sin logo.
+    image: Option<String>,
+    corner: Corner,
+    size: LogoSize,
+    /// 0..1; como marca de agua, por defecto semitransparente.
+    opacity: f64,
+}
+
+impl Default for Logo {
+    fn default() -> Self {
+        Self { image: None, corner: Corner::TopRight, size: LogoSize::Medium, opacity: 0.6 }
+    }
+}
+
 /// Cómo se coloca el texto en la pantalla. Se aplica a lo que está al aire en cuanto cambia.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -110,6 +206,13 @@ struct OutputStyle {
     align: TextAlign,
     position: VerticalPosition,
     background: Background,
+    #[serde(default)]
+    font: Font,
+    /// Imagen o GIF detrás del texto, la Biblia y el reloj.
+    #[serde(default)]
+    background_image: Option<String>,
+    #[serde(default)]
+    logo: Logo,
 }
 
 impl Default for OutputStyle {
@@ -119,6 +222,9 @@ impl Default for OutputStyle {
             align: TextAlign::Center,
             position: VerticalPosition::Middle,
             background: Background::Black,
+            font: Font::System,
+            background_image: None,
+            logo: Logo::default(),
         }
     }
 }
@@ -127,6 +233,7 @@ impl OutputContent {
     fn media_path(&self) -> Option<&str> {
         match self {
             Self::Image { path } | Self::Video { path, .. } | Self::Pdf { path, .. } => Some(path),
+            Self::Text { background, .. } => background.as_deref(),
             _ => None,
         }
     }
@@ -146,6 +253,11 @@ enum CommandError {
     ObsRunning,
     ObsNotConnected,
     Obs { message: String },
+    /// Para mostrar presentaciones hace falta LibreOffice.
+    OfficeNotInstalled,
+    ConversionFailed { file: String, reason: String },
+    /// No se pudo leer o escribir la base de datos local.
+    Storage { message: String },
     Internal { message: String },
 }
 
@@ -161,6 +273,8 @@ enum MediaKind {
     Image,
     Video,
     Pdf,
+    /// PowerPoint o Impress: se convierte a PDF al prepararla (office.rs).
+    Presentation,
 }
 
 #[derive(Serialize)]
@@ -180,9 +294,21 @@ fn media_kind(path: &Path) -> Option<MediaKind> {
         Some(MediaKind::Video)
     } else if PDF_EXTENSIONS.contains(&ext) {
         Some(MediaKind::Pdf)
+    } else if office::PRESENTATION_EXTENSIONS.contains(&ext) {
+        Some(MediaKind::Presentation)
     } else {
         None
     }
+}
+
+/// Extensiones para el filtro del selector de archivos, en minúsculas y en mayúsculas:
+/// en Linux el filtro distingue mayúsculas y una foto «IMG_0001.JPG» no aparecería.
+fn dialog_extensions(groups: &[&[&str]]) -> Vec<String> {
+    groups
+        .iter()
+        .flat_map(|g| g.iter())
+        .flat_map(|ext| [ext.to_string(), ext.to_uppercase()])
+        .collect()
 }
 
 // El protocolo asset empieza sin acceso a nada; solo se abren los archivos que el usuario elige.
@@ -207,6 +333,25 @@ struct AppState {
     bibles: Mutex<bible::Library>,
     /// Conexión con OBS; None si no hay. Mutex de tokio: se mantiene durante las peticiones.
     obs: tauri::async_runtime::Mutex<Option<obws::Client>>,
+    /// Se abre al arrancar (setup); None solo antes de eso.
+    store: Mutex<Option<store::Store>>,
+}
+
+fn with_store<T>(
+    state: &AppState,
+    action: impl FnOnce(&mut store::Store) -> rusqlite::Result<T>,
+) -> Result<T, CommandError> {
+    let mut guard = state.store.lock().unwrap();
+    let store = guard.as_mut().ok_or_else(|| CommandError::Storage {
+        message: "la base de datos aún no está lista".into(),
+    })?;
+    action(store).map_err(|e| CommandError::Storage { message: e.to_string() })
+}
+
+fn emit_settings(app: &AppHandle, state: &AppState) -> Result<serde_json::Map<String, serde_json::Value>, CommandError> {
+    let settings = with_store(state, |store| store.settings())?;
+    let _ = app.emit(SETTINGS_EVENT, &settings);
+    Ok(settings)
 }
 
 impl From<obs::ObsError> for CommandError {
@@ -329,6 +474,14 @@ async fn open_output(
             .map_err(internal)?,
     };
     place_fullscreen(&window, monitor, monitor_index)?;
+    // El teclado vuelve a la consola (si el sistema lo permite): las flechas avanzan desde allí.
+    // Se encola detrás de la colocación de la salida, que también corre en el hilo principal.
+    if let Some(console) = app.get_webview_window(MAIN_LABEL) {
+        let target = console.clone();
+        let _ = console.run_on_main_thread(move || {
+            let _ = target.set_focus();
+        });
+    }
 
     let name = monitor_name(monitor, monitor_index);
     Ok(publish(&app, &state, |output| {
@@ -354,11 +507,12 @@ fn set_output_content(
     content: OutputContent,
 ) -> Result<OutputState, CommandError> {
     let deck_len = match &content {
-        OutputContent::Text { slides, index } => Some((slides.len(), *index)),
+        OutputContent::Text { slides, index, .. } => Some((slides.len(), *index)),
         OutputContent::Scripture { verses, index, .. } => Some((verses.len(), *index)),
         _ => None,
     };
-    if deck_len.is_some_and(|(len, index)| index >= len) {
+    let empty_timer = matches!(content, OutputContent::Timer { duration_ms: 0, .. });
+    if empty_timer || deck_len.is_some_and(|(len, index)| index >= len) {
         return Err(CommandError::InvalidContent);
     }
     if let Some(path) = content.media_path() {
@@ -380,20 +534,20 @@ async fn pick_media(
     title: String,
     filter_name: String,
 ) -> Result<Vec<MediaFile>, CommandError> {
-    let all: Vec<&str> = [IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, PDF_EXTENSIONS].concat();
-    let Some(picked) = app
-        .dialog()
-        .file()
-        .set_title(title)
-        .add_filter(filter_name, &all)
-        .blocking_pick_files()
-    else {
+    let request = picker::Request {
+        title,
+        filter: Some((
+            filter_name,
+            dialog_extensions(&[IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, PDF_EXTENSIONS, office::PRESENTATION_EXTENSIONS]),
+        )),
+        mode: picker::Mode::Files,
+    };
+    let Some(picked) = picker::pick(&app, request).await.map_err(internal)? else {
         return Ok(Vec::new());
     };
 
     let mut files = Vec::new();
-    for file in picked {
-        let path: PathBuf = file.into_path().map_err(internal)?;
+    for path in picked {
         if let Some(media) = to_media_file(&app, path)? {
             files.push(media);
         }
@@ -421,10 +575,10 @@ const MAX_FOLDER_FILES: usize = 2000;
 /// None si se cancela el diálogo; lista vacía si la carpeta no tiene nada compatible.
 #[tauri::command]
 async fn pick_media_folder(app: AppHandle, title: String) -> Result<Option<Vec<MediaFile>>, CommandError> {
-    let Some(folder) = app.dialog().file().set_title(title).blocking_pick_folder() else {
+    let request = picker::Request { title, filter: None, mode: picker::Mode::Folder };
+    let Some(root) = picker::pick(&app, request).await.map_err(internal)?.and_then(|p| p.into_iter().next()) else {
         return Ok(None);
     };
-    let root = folder.into_path().map_err(internal)?;
 
     let mut found = Vec::new();
     let mut pending = vec![root];
@@ -601,19 +755,17 @@ async fn import_bibles(
     title: String,
     filter_name: String,
 ) -> Result<Vec<bible::BibleInfo>, CommandError> {
-    let Some(picked) = app
-        .dialog()
-        .file()
-        .set_title(title)
-        .add_filter(filter_name, &["xml"])
-        .blocking_pick_files()
-    else {
+    let request = picker::Request {
+        title,
+        filter: Some((filter_name, dialog_extensions(&[&["xml"]]))),
+        mode: picker::Mode::Files,
+    };
+    let Some(picked) = picker::pick(&app, request).await.map_err(internal)? else {
         return Ok(Vec::new());
     };
     let dir = bibles_dir(&app)?;
     let mut imported = Vec::new();
-    for file in picked {
-        let path = file.into_path().map_err(internal)?;
+    for path in picked {
         let info = state
             .bibles
             .lock()
@@ -685,14 +837,193 @@ fn report_output_error(app: AppHandle, message: String) {
     let _ = app.emit(OUTPUT_ERROR_EVENT, message);
 }
 
+/// Si el foco quedó en la salida, sus flechas (o un presentador inalámbrico) mueven igual lo que está en pantalla.
 #[tauri::command]
-fn set_output_style(app: AppHandle, state: State<'_, AppState>, style: OutputStyle) -> OutputState {
+fn output_navigate(app: AppHandle, forward: bool) {
+    let _ = app.emit(OUTPUT_NAVIGATE_EVENT, forward);
+}
+
+#[tauri::command]
+fn set_output_style(app: AppHandle, state: State<'_, AppState>, mut style: OutputStyle) -> OutputState {
+    // Un fondo o un logo que ya no existe (archivo movido, otro equipo) se quita en vez de dejar la pantalla rota.
+    for image in [&mut style.background_image, &mut style.logo.image] {
+        if let Some(path) = image.as_deref() {
+            let path = Path::new(path);
+            if !path.is_file() || allow_media(&app, path).is_err() {
+                *image = None;
+            }
+        }
+    }
+    style.logo.opacity = style.logo.opacity.clamp(0.1, 1.0);
     publish(&app, &state, |output| output.style = style)
+}
+
+/// Convierte una presentación a PDF (o la toma de la caché) y devuelve la ruta del PDF, lista para mostrarse.
+#[tauri::command]
+async fn convert_presentation(app: AppHandle, path: String) -> Result<String, CommandError> {
+    let source = PathBuf::from(&path);
+    if !source.is_file() {
+        return Err(CommandError::FileMissing { path });
+    }
+    let cache = app.path().app_cache_dir().map_err(internal)?.join("presentaciones");
+    let file = source.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    // LibreOffice tarda unos segundos: fuera del hilo de los comandos.
+    let pdf = tauri::async_runtime::spawn_blocking(move || office::convert(&source, &cache))
+        .await
+        .map_err(internal)?
+        .map_err(|e| match e {
+            office::OfficeError::NotInstalled => CommandError::OfficeNotInstalled,
+            office::OfficeError::Failed(reason) => {
+                eprintln!("[presentación] {file}: {reason}");
+                CommandError::ConversionFailed { file, reason }
+            }
+        })?;
+    allow_media(&app, &pdf)?;
+    Ok(pdf.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+fn office_available() -> bool {
+    office::find_soffice().is_some()
+}
+
+/// Elige una imagen o GIF de fondo. None si se cancela.
+#[tauri::command]
+async fn pick_background(
+    app: AppHandle,
+    title: String,
+    filter_name: String,
+) -> Result<Option<String>, CommandError> {
+    let request = picker::Request {
+        title,
+        filter: Some((filter_name, dialog_extensions(&[IMAGE_EXTENSIONS]))),
+        mode: picker::Mode::File,
+    };
+    let Some(path) = picker::pick(&app, request).await.map_err(internal)?.and_then(|p| p.into_iter().next()) else {
+        return Ok(None);
+    };
+    allow_media(&app, &path)?;
+    Ok(Some(path.to_string_lossy().into_owned()))
+}
+
+/// Vuelve a permitir los fondos guardados (el permiso del protocolo asset no sobrevive a un reinicio).
+/// Devuelve los que siguen existiendo; solo imágenes, para no abrir otros archivos.
+#[tauri::command]
+fn allow_backgrounds(app: AppHandle, paths: Vec<String>) -> Vec<String> {
+    paths
+        .into_iter()
+        .filter(|p| {
+            let path = Path::new(p);
+            path.is_file()
+                && matches!(media_kind(path), Some(MediaKind::Image))
+                && allow_media(&app, path).is_ok()
+        })
+        .collect()
+}
+
+// --- Base de datos local: ajustes, letras y lista ---
+
+#[tauri::command]
+fn settings_get(state: State<'_, AppState>) -> Result<serde_json::Map<String, serde_json::Value>, CommandError> {
+    with_store(&state, |store| store.settings())
+}
+
+#[tauri::command]
+fn settings_set(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    key: String,
+    value: serde_json::Value,
+) -> Result<(), CommandError> {
+    with_store(&state, |store| store.set_setting(&key, &value))?;
+    emit_settings(&app, &state).map(|_| ())
+}
+
+/// Vuelve al valor inicial esas claves; lista vacía = todos los ajustes.
+#[tauri::command]
+fn settings_reset(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    keys: Vec<String>,
+) -> Result<serde_json::Map<String, serde_json::Value>, CommandError> {
+    with_store(&state, |store| store.reset_settings(&keys))?;
+    emit_settings(&app, &state)
+}
+
+/// Dónde está la base (para mostrarlo en Ajustes); None si se trabaja en memoria.
+#[tauri::command]
+fn store_path(state: State<'_, AppState>) -> Option<String> {
+    let guard = state.store.lock().unwrap();
+    guard.as_ref()?.path().map(|p| p.display().to_string())
+}
+
+#[tauri::command]
+fn songs_list(state: State<'_, AppState>) -> Result<Vec<store::Song>, CommandError> {
+    with_store(&state, |store| store.songs())
+}
+
+#[tauri::command]
+fn song_save(state: State<'_, AppState>, song: store::Song) -> Result<(), CommandError> {
+    with_store(&state, |store| store.save_song(&song))
+}
+
+#[tauri::command]
+fn song_delete(state: State<'_, AppState>, id: String) -> Result<(), CommandError> {
+    with_store(&state, |store| store.delete_song(&id))
+}
+
+#[tauri::command]
+fn setlist_get(state: State<'_, AppState>) -> Result<Vec<String>, CommandError> {
+    with_store(&state, |store| store.setlist())
+}
+
+#[tauri::command]
+fn setlist_set(state: State<'_, AppState>, ids: Vec<String>) -> Result<(), CommandError> {
+    with_store(&state, |store| store.set_setlist(&ids))
+}
+
+#[tauri::command]
+fn songs_reset(state: State<'_, AppState>) -> Result<(), CommandError> {
+    with_store(&state, |store| store.reset_songs())
 }
 
 #[tauri::command]
 fn get_output_state(state: State<'_, AppState>) -> OutputState {
     state.output.lock().unwrap().clone()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn estilo_con_y_sin_logo() {
+        // Un estilo guardado antes de que existiera el logo sigue valiendo: sin logo, esquina superior derecha.
+        let old: OutputStyle = serde_json::from_str(
+            r#"{"fontScale":1.1,"align":"center","position":"middle","background":"black","font":"system","backgroundImage":null}"#,
+        )
+        .unwrap();
+        assert!(old.logo.image.is_none());
+        assert!(matches!(old.logo.corner, Corner::TopRight));
+
+        let json = r#"{"fontScale":1.5,"align":"left","position":"top","background":"navy","font":"oswald","backgroundImage":null,"logo":{"image":"/x/logo.png","corner":"bottomRight","size":"large","opacity":0.4}}"#;
+        let style: OutputStyle = serde_json::from_str(json).unwrap();
+        assert_eq!(serde_json::to_value(&style).unwrap(), serde_json::from_str::<serde_json::Value>(json).unwrap());
+    }
+
+    // Los contenidos llegan de la interfaz en camelCase: un campo mal nombrado solo falla al enviarlo.
+    #[test]
+    fn contenidos_de_la_interfaz() {
+        for json in [
+            r#"{"kind":"timer","durationMs":60000,"endsAt":null,"remainingMs":60000}"#,
+            r#"{"kind":"clock","hour12":true,"seconds":false}"#,
+            r#"{"kind":"text","slides":["a"],"index":0,"credit":"c","background":null}"#,
+            r#"{"kind":"scripture","verses":[{"reference":"Jn 3:16","text":"t","second":{"reference":"Jn 3:16","text":"t"}}],"index":0,"version":"V","copyright":"","second":{"version":"W","copyright":""}}"#,
+        ] {
+            let content: OutputContent = serde_json::from_str(json).expect(json);
+            assert_eq!(serde_json::to_value(&content).unwrap(), serde_json::from_str::<serde_json::Value>(json).unwrap());
+        }
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -702,6 +1033,9 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
         .setup(|app| {
+            // La base se abre antes que nada: la interfaz lee sus ajustes al cargar.
+            let dir = app.path().app_data_dir()?;
+            *app.state::<AppState>().store.lock().unwrap() = Some(store::Store::open(&dir));
             // Las Biblias se leen en segundo plano al arrancar, para que estén listas al abrir el panel.
             let handle = app.handle().clone();
             std::thread::spawn(move || {
@@ -732,9 +1066,24 @@ pub fn run() {
             set_output_content,
             get_output_state,
             set_output_style,
+            settings_get,
+            settings_set,
+            settings_reset,
+            store_path,
+            songs_list,
+            song_save,
+            song_delete,
+            setlist_get,
+            setlist_set,
+            songs_reset,
+            pick_background,
+            convert_presentation,
+            office_available,
+            allow_backgrounds,
             pick_media,
             pick_media_folder,
             report_output_error,
+            output_navigate,
             log_client_error,
             list_bibles,
             import_bibles,

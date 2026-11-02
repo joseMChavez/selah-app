@@ -1,12 +1,14 @@
 <script lang="ts">
   // Navegación de la Biblia en tres pasos: libro → capítulo → versículo.
   // El buscador es un atajo: «Juan 3:16», «Sal 23» o palabras.
-  import { onMount, tick } from "svelte";
+  import { onMount, tick, untrack } from "svelte";
   import { bookName, type BookLanguage } from "$lib/bible/books";
   import { parseQuery } from "$lib/bible/reference";
   import { i18n, locales, t, type Locale } from "$lib/i18n/index.svelte";
   import { toMessage, type Message } from "$lib/messages";
+  import { bibles, importBibles as importFromDisk, loadBibles, visibleBibles } from "$lib/bibles.svelte";
   import { platform, type BibleInfo, type OutputContent, type SearchHit, type Verse } from "$lib/platform";
+  import { setSetting, settings } from "$lib/settings.svelte";
 
   let {
     prepared,
@@ -23,36 +25,50 @@
     onerror: (message: Message) => void;
   } = $props();
 
-  const STORAGE_KEY = "selah.bible";
   const FIRST_NEW_TESTAMENT_BOOK = 40;
 
   type View =
     | { step: "books" }
     | { step: "chapters"; book: number }
-    | { step: "verses"; book: number; chapter: number; verses: Verse[]; range: [number, number] | null }
+    | {
+        step: "verses";
+        book: number;
+        chapter: number;
+        verses: Verse[];
+        /** El mismo capítulo en la segunda versión (null si no hay o no lo tiene). */
+        second: Verse[] | null;
+        range: [number, number] | null;
+      }
     | { step: "search"; query: string; hits: SearchHit[] }
     | { step: "notFound"; reference: string };
 
-  let bibles = $state<BibleInfo[]>([]);
-  let loading = $state(true);
-  let bibleId = $state<string | null>(null);
+  /** Las versiones que se pueden elegir (sin las ocultas en Ajustes). */
+  let available = $derived(visibleBibles());
+  // La versión elegida se guarda en los ajustes; si ya no existe, se usa la primera.
+  let bibleId = $derived(available.some((b) => b.id === settings.bible) ? settings.bible : (available[0]?.id ?? null));
+  /** Segunda versión que se muestra debajo de la primera; null = solo una. */
+  let secondId = $derived(settings.bible2);
   let query = $state("");
   let view = $state<View>({ step: "books" });
   let input = $state<HTMLInputElement>();
   let verseList = $state<HTMLOListElement>();
 
-  let bible = $derived(bibles.find((b) => b.id === bibleId) ?? null);
+  let bible = $derived(available.find((b) => b.id === bibleId) ?? null);
+  let secondBible = $derived(secondId !== bibleId ? (available.find((b) => b.id === secondId) ?? null) : null);
   // Los nombres de libro siguen el idioma de la Biblia, no el de la interfaz.
-  let language = $derived<BookLanguage>(
-    bible?.language && bible.language in locales ? (bible.language as BookLanguage) : i18n.locale,
-  );
+  let language = $derived(languageOf(bible));
+  let secondLanguage = $derived(languageOf(secondBible));
   let parsed = $derived(parseQuery(query, language));
   let suggestions = $derived(query.trim() && !parsed.reference ? parsed.books.slice(0, 6) : []);
   let preparedRef = $derived(prepared.kind === "scripture" ? prepared.verses[prepared.index]?.reference : null);
   let liveRef = $derived(live.kind === "scripture" ? live.verses[live.index]?.reference : null);
-  let groups = $derived(groupByLanguage(bibles));
+  let groups = $derived(groupByLanguage(available));
   let oldTestament = $derived(bible?.books.filter((b) => b.number < FIRST_NEW_TESTAMENT_BOOK) ?? []);
   let newTestament = $derived(bible?.books.filter((b) => b.number >= FIRST_NEW_TESTAMENT_BOOK) ?? []);
+
+  function languageOf(b: BibleInfo | null): BookLanguage {
+    return b?.language && b.language in locales ? (b.language as BookLanguage) : i18n.locale;
+  }
 
   function groupByLanguage(list: BibleInfo[]) {
     const map = new Map<string, BibleInfo[]>();
@@ -66,46 +82,57 @@
     }));
   }
 
-  function remember(id: string) {
-    try {
-      localStorage.setItem(STORAGE_KEY, id);
-    } catch {
-      // Sin almacenamiento: se elige la primera la próxima vez.
+  /** Los botones de versión funcionan como interruptores: una marcada = una versión; dos = vista doble.
+   *  La primera marcada va arriba y la segunda abajo. Siempre queda al menos una. */
+  function toggleVersion(id: string) {
+    if (id === bibleId) {
+      // Se desmarca la de arriba: la de abajo sube.
+      if (secondBible) {
+        setSetting("bible", secondBible.id);
+        setSetting("bible2", null);
+      }
+    } else if (id === secondBible?.id) {
+      setSetting("bible2", null);
+    } else if (bibleId === null) {
+      setSetting("bible", id);
+    } else {
+      // Con dos ya marcadas, la nueva sustituye a la de abajo.
+      if (settings.bible !== bibleId) setSetting("bible", bibleId);
+      setSetting("bible2", id);
     }
   }
 
-  function selectBible(id: string) {
-    bibleId = id;
-    remember(id);
-    // Al cambiar de versión se recarga lo que se estaba viendo, para no mezclar textos de dos versiones.
-    if (view.step === "verses") openChapter(view.book, view.chapter, view.range);
+  function versionTooltip(b: BibleInfo): string {
+    return `${b.name}\n${b.copyright || t("bible.noCopyright")}`;
+  }
+
+  // Cambie desde aquí o desde Ajustes (también al restablecer), lo que se está viendo se recarga.
+  $effect(() => {
+    void [bible?.id, secondBible?.id];
+    untrack(reload);
+  });
+
+  // Al cambiar de versión se recarga lo que se estaba viendo, para no mezclar textos de dos versiones.
+  // Si había un versículo de este capítulo preparado, se vuelve a preparar con las versiones nuevas.
+  function reload() {
+    if (view.step === "verses") openChapter(view.book, view.chapter, view.range, preparedVerseHere());
     else if (view.step === "search") search(view.query);
   }
 
-  async function loadBibles(preferred?: string) {
-    try {
-      bibles = await platform.listBibles();
-    } catch (e) {
-      onerror(toMessage(e));
-    }
-    loading = false;
-    let saved: string | null = null;
-    try {
-      saved = localStorage.getItem(STORAGE_KEY);
-    } catch {
-      // Ignorado.
-    }
-    const pick = [preferred, bibleId, saved].find((id) => id && bibles.some((b) => b.id === id));
-    bibleId = pick ?? bibles[0]?.id ?? null;
+  /** Número del versículo preparado si es de este capítulo. La referencia cambia de idioma con la versión,
+   *  así que se compara el «capítulo:versículo» del final. */
+  function preparedVerseHere(): number | undefined {
+    if (view.step !== "verses" || prepared.kind !== "scripture") return undefined;
+    const match = prepared.verses[prepared.index]?.reference.match(/(\d+):(\d+)$/);
+    if (!match || Number(match[1]) !== view.chapter) return undefined;
+    const n = Number(match[2]);
+    return view.verses.some((v) => v.number === n) ? n : undefined;
   }
 
   async function importBibles() {
     try {
-      const imported = await platform.importBibles(t("bible.dialogTitle"), t("bible.dialogFilter"));
-      if (imported.length > 0) {
-        await loadBibles(imported[0].id);
-        remember(imported[0].id);
-      }
+      const imported = await importFromDisk(t("bible.dialogTitle"), t("bible.dialogFilter"));
+      if (imported.length > 0) setSetting("bible", imported[0].id);
     } catch (e) {
       onerror(toMessage(e));
     }
@@ -115,21 +142,32 @@
     return `${bookName(book, language)} ${chapter}${verse ? `:${verse}` : ""}`;
   }
 
-  function scripture(book: number, chapter: number, verses: Verse[], start: number): OutputContent | null {
+  function scripture(book: number, chapter: number, verses: Verse[], start: number, second: Verse[] | null): OutputContent | null {
     if (!bible) return null;
     const index = verses.findIndex((v) => v.number === start);
+    const parallel = (n: number) => {
+      const text = second?.find((v) => v.number === n)?.text;
+      return text ? { reference: `${bookName(book, secondLanguage)} ${chapter}:${n}`, text } : null;
+    };
     return {
       kind: "scripture",
-      verses: verses.map((v) => ({ reference: refText(book, chapter, v.number), text: v.text })),
+      verses: verses.map((v) => ({ reference: refText(book, chapter, v.number), text: v.text, second: parallel(v.number) })),
       index: Math.max(index, 0),
       version: bible.abbreviation,
       copyright: bible.copyright,
+      second: secondBible && second ? { version: secondBible.abbreviation, copyright: secondBible.copyright } : null,
     };
   }
 
-  function prepareFrom(book: number, chapter: number, verses: Verse[], start: number) {
-    const content = scripture(book, chapter, verses, start);
+  function prepareFrom(book: number, chapter: number, verses: Verse[], start: number, second: Verse[] | null) {
+    const content = scripture(book, chapter, verses, start, second);
     if (content) onprepare(content);
+  }
+
+  /** El capítulo en la segunda versión; null si no hay segunda o ella no lo tiene. */
+  async function secondChapter(book: number, chapter: number): Promise<Verse[] | null> {
+    if (!secondBible) return null;
+    return platform.getChapter(secondBible.id, book, chapter).catch(() => null);
   }
 
   async function scrollToVerse(n: number) {
@@ -140,18 +178,19 @@
   async function openChapter(book: number, chapter: number, range: [number, number] | null, prepareVerse?: number) {
     if (!bible) return;
     try {
-      const verses = await platform.getChapter(bible.id, book, chapter);
-      view = { step: "verses", book, chapter, verses, range };
+      const [verses, second] = await Promise.all([platform.getChapter(bible.id, book, chapter), secondChapter(book, chapter)]);
+      view = { step: "verses", book, chapter, verses, second, range };
       if (range) {
         const inRange = verses.filter((v) => v.number >= range[0] && v.number <= range[1]);
         if (inRange.length === 0) {
           view = { step: "notFound", reference: `${refText(book, chapter)}:${range[0]}` };
           return;
         }
-        prepareFrom(book, chapter, inRange, inRange[0].number);
-        scrollToVerse(inRange[0].number);
+        const start = prepareVerse && inRange.some((v) => v.number === prepareVerse) ? prepareVerse : inRange[0].number;
+        prepareFrom(book, chapter, inRange, start, second);
+        scrollToVerse(start);
       } else if (prepareVerse) {
-        prepareFrom(book, chapter, verses, prepareVerse);
+        prepareFrom(book, chapter, verses, prepareVerse, second);
         scrollToVerse(prepareVerse);
       }
     } catch (e) {
@@ -202,12 +241,12 @@
   /** La serie que recorre un versículo: dentro del rango buscado, solo el rango; fuera, el capítulo entero. */
   function verseContent(verse: Verse): OutputContent | null {
     if (view.step !== "verses") return null;
-    const { book, chapter, verses, range } = view;
+    const { book, chapter, verses, second, range } = view;
     if (range && verse.number >= range[0] && verse.number <= range[1]) {
-      return scripture(book, chapter, verses.filter((v) => v.number >= range[0] && v.number <= range[1]), verse.number);
+      return scripture(book, chapter, verses.filter((v) => v.number >= range[0] && v.number <= range[1]), verse.number, second);
     }
     view = { ...view, range: null };
-    return scripture(book, chapter, verses, verse.number);
+    return scripture(book, chapter, verses, verse.number, second);
   }
 
   // Sin desplazar la lista: si se moviera entre los dos clics, el doble clic caería en otro versículo.
@@ -244,41 +283,44 @@
   }
 
   onMount(() => {
-    loadBibles();
+    loadBibles().catch((e) => onerror(toMessage(e)));
   });
 </script>
 
 <div class="bible">
-  {#if loading}
+  {#if bibles.loading}
     <p class="muted">{t("bible.loading")}</p>
-  {:else if bibles.length === 0}
+  {:else if available.length === 0}
     <div class="empty">
       <p>{t("bible.empty")}</p>
       <button class="btn primary" onclick={importBibles}>{t("bible.importFirst")}</button>
     </div>
   {:else}
     <div class="top">
-      <div class="version">
-        <label class="grow">
-          <span class="label">{t("bible.version")}</span>
-          <select class="field" value={bibleId} onchange={(e) => selectBible(e.currentTarget.value)}>
-            {#each groups as group (group.label)}
-              <optgroup label={group.label}>
-                {#each group.items as b (b.id)}
-                  <option value={b.id}>{b.abbreviation} — {b.name}</option>
-                {/each}
-              </optgroup>
-            {/each}
-          </select>
-        </label>
-        <button class="btn" onclick={importBibles}>{t("bible.import")}</button>
+      <div class="versions" role="group" aria-label={t("bible.version")}>
+        {#each groups as group (group.label)}
+          {#if groups.length > 1}<span class="lang">{group.label}</span>{/if}
+          {#each group.items as b (b.id)}
+            {@const order = b.id === bibleId ? 1 : b.id === secondBible?.id ? 2 : 0}
+            <button
+              class="version-chip"
+              class:no-copyright={!b.copyright}
+              aria-pressed={order > 0}
+              title={versionTooltip(b)}
+              onclick={() => toggleVersion(b.id)}
+            >
+              {#if order}<span class="order" aria-label={t(order === 1 ? "bible.top" : "bible.bottom")}>{order}</span>{/if}
+              {b.abbreviation}
+              {#if !b.copyright}<span class="flag" aria-hidden="true">!</span>{/if}
+            </button>
+          {/each}
+        {/each}
+        <button class="version-chip add" onclick={importBibles} title={t("bible.import")} aria-label={t("bible.import")}>+</button>
       </div>
-
-      {#if bible}
-        <p class="copyright" class:missing={!bible.copyright}>
-          {bible.copyright ? bible.copyright : t("bible.noCopyright")}
-        </p>
-      {/if}
+      <p class="muted small">{t(secondBible ? "bible.dualOn" : "bible.versionsHint")}</p>
+      {#each [bible, secondBible].filter((b) => b && !b.copyright) as b (b!.id)}
+        <p class="no-copyright-note">{b!.abbreviation}: {t("bible.noCopyright")}</p>
+      {/each}
 
       <form class="search" onsubmit={submit}>
         <input
@@ -343,7 +385,10 @@
         </div>
       {:else if view.step === "verses"}
         <div class="chapter-head">
-          <h3>{refText(view.book, view.chapter)}</h3>
+          <h3>
+            {refText(view.book, view.chapter)}
+            {#if secondBible}<span class="dual" title={t("bible.dualHint")}>{bible?.abbreviation} + {secondBible.abbreviation}</span>{/if}
+          </h3>
           <div class="nav">
             <button class="btn ghost" onclick={() => goChapter(-1)} disabled={!adjacentChapter(-1)}>{t("bible.prevChapter")}</button>
             <button class="btn ghost" onclick={() => goChapter(1)} disabled={!adjacentChapter(1)}>{t("bible.nextChapter")}</button>
@@ -410,20 +455,42 @@
   .bible { display: flex; flex-direction: column; gap: 12px; min-height: 0; height: 100%; }
   .top { display: flex; flex-direction: column; gap: 10px; }
   .empty { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; padding: 8px 0; }
-  .version, .search { display: flex; gap: 8px; align-items: flex-end; }
+  .search { display: flex; gap: 8px; align-items: flex-end; }
   .search .field { min-height: 44px; font-size: 16px; }
-  .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-  .label { font-size: 13px; font-weight: 600; color: var(--muted); }
-  .copyright {
-    font-size: 12.5px;
-    line-height: 1.4;
-    color: var(--muted);
-    padding: 8px 10px;
-    border-left: 3px solid var(--accent);
+  .versions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .lang { width: 100%; font-size: 12px; font-weight: 650; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .lang:not(:first-child) { margin-top: 4px; }
+  .version-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 38px;
+    padding: 0 12px;
+    font: inherit;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--text);
     background: var(--surface-2);
-    border-radius: 0 6px 6px 0;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    cursor: pointer;
   }
-  .copyright.missing { border-left-color: var(--live); color: var(--text); }
+  .version-chip:hover { border-color: var(--accent); }
+  .version-chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  .version-chip.add { min-width: 38px; justify-content: center; padding: 0; font-size: 18px; font-weight: 500; color: var(--muted); }
+  .order {
+    display: inline-grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    font-size: 11px;
+    border-radius: 50%;
+    background: var(--accent-text);
+    color: var(--accent);
+  }
+  .flag { color: var(--live); }
+  .no-copyright-note { font-size: 12.5px; padding: 6px 10px; border-left: 3px solid var(--live); background: var(--surface-2); border-radius: 0 6px 6px 0; }
+  .version-chip[aria-pressed="true"] .flag { color: inherit; }
   .suggestions { display: flex; flex-wrap: wrap; gap: 6px; }
   .chip {
     min-height: 32px;
@@ -481,7 +548,15 @@
   .cell.live { border-color: var(--live); background: var(--live-soft); box-shadow: inset 0 0 0 1px var(--live); }
 
   .chapter-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
-  .chapter-head h3 { font-size: 18px; }
+  .chapter-head h3 { font-size: 18px; display: flex; align-items: center; gap: 8px; }
+  .dual {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
   .nav { display: flex; gap: 4px; }
   .verses { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
   .verse {

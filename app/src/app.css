@@ -152,5 +152,7 @@ select.field { cursor: pointer; }
   overflow: hidden;
   border: 2px solid var(--border);
   background: #000;
+  /* En una columna flexible con mucho contenido debajo, la vista previa no se encoge: se desplaza la columna. */
+  flex-shrink: 0;
 }
 .screen.live { border-color: var(--live); }

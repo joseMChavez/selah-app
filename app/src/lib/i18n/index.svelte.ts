@@ -1,5 +1,6 @@
 // Idioma de la interfaz. Es independiente del idioma de cada Biblia o medio.
-// La preferencia se guarda en localStorage por ahora; en la Fase 3 pasa a la base de datos local.
+// La preferencia se guarda en la base de datos local (ajuste «locale»; sin valor, el del sistema).
+import { setSetting, settings } from "$lib/settings.svelte";
 import en from "./en";
 import es, { type MessageKey } from "./es";
 import it from "./it";
@@ -12,43 +13,25 @@ export const locales = {
 
 export type Locale = keyof typeof locales;
 
-const STORAGE_KEY = "selah.locale";
-
 function isLocale(value: unknown): value is Locale {
   return typeof value === "string" && value in locales;
 }
 
-function initialLocale(): Locale {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (isLocale(saved)) return saved;
-  } catch {
-    // Sin almacenamiento disponible: se usa el idioma del sistema.
-  }
+const systemLocale: Locale = (() => {
   const system = navigator.language.slice(0, 2);
   return isLocale(system) ? system : "es";
+})();
+
+export const i18n = {
+  /** El elegido, o el del sistema si no se eligió ninguno (o el guardado ya no existe). */
+  get locale(): Locale {
+    return isLocale(settings.locale) ? settings.locale : systemLocale;
+  },
+};
+
+export function setLocale(locale: Locale | null) {
+  setSetting("locale", locale);
 }
-
-export const i18n = $state({ locale: initialLocale() });
-document.documentElement.lang = i18n.locale;
-
-export function setLocale(locale: Locale) {
-  i18n.locale = locale;
-  document.documentElement.lang = locale;
-  try {
-    localStorage.setItem(STORAGE_KEY, locale);
-  } catch {
-    // La preferencia no se recordará, pero el cambio se aplica igual.
-  }
-}
-
-// La ventana de salida comparte almacenamiento con la consola: así cambia de idioma a la vez.
-window.addEventListener("storage", (event) => {
-  if (event.key === STORAGE_KEY && isLocale(event.newValue)) {
-    i18n.locale = event.newValue;
-    document.documentElement.lang = event.newValue;
-  }
-});
 
 export function t(key: MessageKey, params: Record<string, string | number> = {}): string {
   // Si faltara una traducción, se muestra la clave: un texto ausente no debe romper la consola.

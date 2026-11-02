@@ -13,18 +13,48 @@
     onerror: (message: Message) => void;
   } = $props();
 
-  const ICONS = { image: "🖼", video: "🎬", pdf: "📄" } as const;
+  const ICONS = { image: "🖼", video: "🎬", pdf: "📄", presentation: "📊" } as const;
 
   let media = $state<MediaFile[]>([]);
   let note = $state("");
   let preparedPath = $derived("path" in prepared ? prepared.path : null);
+  /** Presentación → PDF ya convertido, para no volver a pedirlo. */
+  let converted = $state<Record<string, string>>({});
+  /** Presentación que se está convirtiendo ahora. */
+  let converting = $state<string | null>(null);
+  /** Lo último que se pidió preparar: si llega tarde una conversión anterior, no lo pisa. */
+  let requested: string | null = null;
+  let officeMissing = $state(false);
+  let hasPresentations = $derived(media.some((m) => m.kind === "presentation"));
 
   function prepare(file: MediaFile) {
+    requested = file.path;
     switch (file.kind) {
       case "image": return onprepare({ kind: "image", path: file.path });
       case "video": return onprepare({ kind: "video", path: file.path, paused: false });
       case "pdf": return onprepare({ kind: "pdf", path: file.path, page: 1 });
+      case "presentation": return preparePresentation(file);
     }
+  }
+
+  // Una presentación se muestra como el PDF que LibreOffice hace de ella (diapositiva = página).
+  async function preparePresentation(file: MediaFile) {
+    let pdf = converted[file.path];
+    if (!pdf) {
+      converting = file.path;
+      try {
+        pdf = await platform.convertPresentation(file.path);
+        converted[file.path] = pdf;
+        officeMissing = false;
+      } catch (e) {
+        if ((e as { code?: string })?.code === "officeNotInstalled") officeMissing = true;
+        else onerror(toMessage(e));
+        return;
+      } finally {
+        if (converting === file.path) converting = null;
+      }
+    }
+    if (requested === file.path) onprepare({ kind: "pdf", path: pdf, page: 1 });
   }
 
   /** Añade sin repetir y prepara el primero nuevo, para verlo enseguida en la vista previa. */
@@ -77,6 +107,7 @@
     {/if}
   </div>
   {#if note}<p class="muted small">{note}</p>{/if}
+  {#if officeMissing}<p class="warn">{t("media.noOffice")}</p>{/if}
 
   {#if media.length === 0}
     <p class="muted">{t("media.empty")}</p>
@@ -84,19 +115,24 @@
     <p class="muted small">{t("media.removeHint")}</p>
     <ul>
       {#each media as file (file.path)}
-        <li class:chosen={file.path === preparedPath}>
+        <li class:chosen={file.path === preparedPath || (preparedPath !== null && converted[file.path] === preparedPath)}>
           <button class="item" onclick={() => prepare(file)} title={file.path}>
             <span class="icon" aria-hidden="true">{ICONS[file.kind]}</span>
             <span class="name">
               {file.name}
               <span class="muted small folder">{folderOf(file.path)}</span>
             </span>
-            <span class="kind muted small">{t(`kind.${file.kind}`)}</span>
+            {#if converting === file.path}
+              <span class="kind small busy" title={t("media.convertingHint")}>{t("media.converting")}</span>
+            {:else}
+              <span class="kind muted small">{t(`kind.${file.kind}`)}</span>
+            {/if}
           </button>
           <button class="remove" onclick={() => remove(file.path)} aria-label={t("media.remove", { name: file.name })} title={t("media.remove", { name: file.name })}>✕</button>
         </li>
       {/each}
     </ul>
+    {#if hasPresentations}<p class="muted small">{t("media.presentationNote")}</p>{/if}
   {/if}
 </div>
 
@@ -143,4 +179,7 @@
     cursor: pointer;
   }
   .remove:hover { color: var(--live); background: var(--live-soft); }
+  .busy { color: var(--accent); font-weight: 600; animation: pulse 1.2s ease-in-out infinite alternate; }
+  @keyframes pulse { from { opacity: 1; } to { opacity: 0.45; } }
+  .warn { padding: 8px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--warn-text); font-size: 14px; }
 </style>

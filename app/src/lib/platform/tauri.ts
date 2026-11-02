@@ -1,7 +1,7 @@
 // Único archivo de la interfaz que importa APIs de Tauri. Migrar a Electron = reescribir este archivo.
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { OutputState, Platform } from "./types";
+import type { OutputState, Platform, StoredSettings } from "./types";
 
 export const tauriPlatform: Platform = {
   listMonitors: () => invoke("list_monitors"),
@@ -13,15 +13,32 @@ export const tauriPlatform: Platform = {
   onOutputState: (handler) => listen<OutputState>("output-state", (event) => handler(event.payload)),
   pickMedia: (title, filterName) => invoke("pick_media", { title, filterName }),
   pickMediaFolder: (title) => invoke("pick_media_folder", { title }),
+  pickBackground: (title, filterName) => invoke("pick_background", { title, filterName }),
+  allowBackgrounds: (paths) => invoke("allow_backgrounds", { paths }),
+  convertPresentation: (path) => invoke("convert_presentation", { path }),
+  officeAvailable: () => invoke("office_available"),
   mediaUrl: (path) => convertFileSrc(path),
   reportOutputError: (message) => invoke("report_output_error", { message }),
   logError: (message) => invoke("log_client_error", { message }),
   onOutputError: (handler) => listen<string>("output-error", (event) => handler(event.payload)),
+  outputNavigate: (forward) => invoke("output_navigate", { forward }),
+  onOutputNavigate: (handler) => listen<boolean>("output-navigate", (event) => handler(event.payload)),
   listBibles: () => invoke("list_bibles"),
   importBibles: (title, filterName) => invoke("import_bibles", { title, filterName }),
   removeBible: (id) => invoke("remove_bible", { id }),
   getChapter: (bibleId, book, chapter) => invoke("get_chapter", { bibleId, book, chapter }),
   searchBible: (bibleId, query) => invoke("search_bible", { bibleId, query }),
+  settingsGet: () => invoke("settings_get"),
+  settingsSet: (key, value) => invoke("settings_set", { key, value }),
+  settingsReset: (keys) => invoke("settings_reset", { keys }),
+  onSettingsChanged: (handler) => listen<StoredSettings>("settings-changed", (event) => handler(event.payload)),
+  storePath: () => invoke("store_path"),
+  songsList: () => invoke("songs_list"),
+  songSave: (song) => invoke("song_save", { song }),
+  songDelete: (id) => invoke("song_delete", { id }),
+  setlistGet: () => invoke("setlist_get"),
+  setlistSet: (ids) => invoke("setlist_set", { ids }),
+  songsReset: () => invoke("songs_reset"),
   obsDetect: () => invoke("obs_detect"),
   obsEnableWebsocket: () => invoke("obs_enable_websocket"),
   obsLaunch: () => invoke("obs_launch"),

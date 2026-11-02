@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "0.2.3"
+version = "0.3.0"
 description = "Proyección y transmisión para iglesias"
 authors = ["joseMChavez"]
 license = "GPL-3.0-only"
@@ -26,8 +26,10 @@ serde_json = "1"
 tauri-plugin-dialog = "2"
 roxmltree = "0.21.2"
 obws = "0.15.0"
-tokio = { version = "1.54.1", features = ["time"] }
+tokio = { version = "1.54.1", features = ["time", "sync"] }
 uuid = { version = "1.29.0", features = ["v4"] }
+# SQLite compilado dentro de la app: los instaladores no dependen de la versión del sistema.
+rusqlite = { version = "0.41", features = ["bundled"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

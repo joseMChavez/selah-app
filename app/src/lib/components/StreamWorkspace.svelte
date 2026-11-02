@@ -4,13 +4,13 @@
   import { onMount } from "svelte";
   import { t, type MessageKey } from "$lib/i18n/index.svelte";
   import { toMessage, type Message } from "$lib/messages";
-  import { connect, detect, disconnect, formatDuration, launchAndConnect, obs, SCENES } from "$lib/obs.svelte";
+  import { connect, detect, disconnect, formatDuration, launchAndConnect, obs, SCENES, waitMessage } from "$lib/obs.svelte";
   import { platform, type ObsCamera, type OutputContent } from "$lib/platform";
+  import { setSetting, settings } from "$lib/settings.svelte";
 
   let { projectionLive, onerror }: { projectionLive: OutputContent; onerror: (message: Message) => void } = $props();
 
   const PREVIEW_MS = 1000;
-  const TEXT_SOURCE_KEY = "selah.obsTextSource";
   const SELAH_TEXT_SOURCE = "Selah · Texto";
   const STOP_CONFIRM_MS = 4000;
 
@@ -30,7 +30,6 @@
   let key = $state("");
   let confirmStop = $state(false);
   let wasConnected = $state(false);
-  let textSource = $state<string | null>(loadTextSource());
 
   let status = $derived(obs.status);
   let streaming = $derived(status?.streaming.active ?? false);
@@ -39,6 +38,7 @@
   let selahScenes = $derived(selahLayouts.filter((l) => status?.scenes.includes(l.scene)));
   let otherScenes = $derived((status?.scenes ?? []).filter((s) => !selahLayouts.some((l) => l.scene === s)));
   let sources = $derived(status?.textSources ?? []);
+  let textSource = $derived(settings.obsTextSource);
   let source = $derived(
     textSource && sources.includes(textSource)
       ? textSource
@@ -47,21 +47,8 @@
         : (sources[0] ?? null),
   );
 
-  function loadTextSource(): string | null {
-    try {
-      return localStorage.getItem(TEXT_SOURCE_KEY);
-    } catch {
-      return null;
-    }
-  }
-
   function chooseTextSource(name: string) {
-    textSource = name;
-    try {
-      localStorage.setItem(TEXT_SOURCE_KEY, name);
-    } catch {
-      // Se usará la de por defecto la próxima vez.
-    }
+    setSetting("obsTextSource", name);
   }
 
   async function run(action: () => Promise<unknown>) {
@@ -82,7 +69,7 @@
   const launch = () => run(launchAndConnect);
   const connectNow = () => run(connect);
   const createScenes = () => run(async () => {
-    await platform.obsSetup(t("stream.waitMessage"));
+    await platform.obsSetup(waitMessage());
     await loadCameras();
   });
   const setScene = (scene: string) => run(() => platform.obsSetScene(scene));

@@ -15,16 +15,39 @@ export type OutputContent =
   | { kind: "empty" }
   | { kind: "black" }
   | { kind: "testPattern" }
-  | { kind: "text"; slides: string[]; index: number }
+  | {
+      kind: "text";
+      slides: string[];
+      index: number;
+      /** Autoría de una letra; se muestra en la primera diapositiva. */
+      credit?: string;
+      /** Imagen o GIF propio de esta letra; tapa el fondo general. */
+      background?: string | null;
+    }
   | { kind: "image"; path: string }
   | { kind: "video"; path: string; paused: boolean }
   | { kind: "pdf"; path: string; page: number }
-  | { kind: "scripture"; verses: ScriptureVerse[]; index: number; version: string; copyright: string };
+  | {
+      kind: "scripture";
+      verses: ScriptureVerse[];
+      index: number;
+      version: string;
+      copyright: string;
+      /** Segunda versión, debajo de la primera. Como mucho dos. */
+      second?: { version: string; copyright: string } | null;
+    }
+  | { kind: "clock"; hour12: boolean; seconds: boolean }
+  /** En marcha si endsAt (ms desde 1970) tiene valor; en pausa, remainingMs guarda lo que queda. */
+  | { kind: "timer"; durationMs: number; endsAt: number | null; remainingMs: number };
 
 export interface ScriptureVerse {
   reference: string;
   text: string;
+  /** El mismo versículo en la segunda versión; null si esa versión no lo tiene. */
+  second?: { reference: string; text: string } | null;
 }
+
+export type FontId = "system" | "montserrat" | "oswald" | "bebasNeue" | "lora" | "merriweather";
 
 export interface OutputStyle {
   /** Tamaño máximo relativo (1 = normal). El texto se reduce solo si no cabe. */
@@ -32,6 +55,22 @@ export interface OutputStyle {
   align: "left" | "center" | "right";
   position: "top" | "middle" | "bottom";
   background: "black" | "navy" | "charcoal";
+  font: FontId;
+  /** Imagen o GIF detrás del texto, la Biblia y el reloj. */
+  backgroundImage: string | null;
+  logo: LogoStyle;
+}
+
+export type Corner = "topLeft" | "topRight" | "bottomLeft" | "bottomRight";
+
+/** Logo o emblema como marca de agua en una esquina de la pantalla. */
+export interface LogoStyle {
+  /** null = sin logo. */
+  image: string | null;
+  corner: Corner;
+  size: "small" | "medium" | "large";
+  /** 0..1 */
+  opacity: number;
 }
 
 export interface BibleInfo {
@@ -59,7 +98,8 @@ export interface SearchHit {
   text: string;
 }
 
-export type MediaKind = "image" | "video" | "pdf";
+/** «presentation» (PowerPoint, Impress) se convierte a PDF al prepararla. */
+export type MediaKind = "image" | "video" | "pdf" | "presentation";
 
 export interface MediaFile {
   path: string;
@@ -103,6 +143,23 @@ export interface ObsCamera {
   name: string;
 }
 
+/** Letra guardada en la biblioteca. */
+export interface Song {
+  id: string;
+  title: string;
+  /** Quien la canta o interpreta. */
+  singer: string;
+  /** Quien escribió la letra. */
+  writer: string;
+  /** Texto completo; **** (o ***) en una línea separa las diapositivas. */
+  body: string;
+  /** Imagen o GIF propio; null = el fondo general. */
+  background: string | null;
+}
+
+/** Ajustes tal como están en la base: clave → valor JSON. Las claves ausentes valen lo de por defecto. */
+export type StoredSettings = Record<string, unknown>;
+
 /** Error devuelto por el backend; la interfaz lo traduce al idioma elegido. */
 export type CommandError =
   | { code: "monitorDisconnected" }
@@ -114,6 +171,9 @@ export type CommandError =
   | { code: "obsRunning" }
   | { code: "obsNotConnected" }
   | { code: "obs"; message: string }
+  | { code: "storage"; message: string }
+  | { code: "officeNotInstalled" }
+  | { code: "conversionFailed"; file: string; reason: string }
   | { code: "internal"; message: string };
 
 export interface OutputState {
@@ -136,18 +196,46 @@ export interface Platform {
   pickMedia(title: string, filterName: string): Promise<MediaFile[]>;
   /** Elige una carpeta y devuelve sus archivos compatibles, subcarpetas incluidas (null si se cancela). */
   pickMediaFolder(title: string): Promise<MediaFile[] | null>;
+  /** Elige una imagen o GIF de fondo; null si se cancela. */
+  pickBackground(title: string, filterName: string): Promise<string | null>;
+  /** Vuelve a permitir fondos guardados tras reiniciar; devuelve los que siguen existiendo. */
+  allowBackgrounds(paths: string[]): Promise<string[]>;
+  /** Convierte una presentación a PDF con LibreOffice (o la toma de la caché) y devuelve la ruta del PDF. */
+  convertPresentation(path: string): Promise<string>;
+  /** LibreOffice está instalado (hace falta para las presentaciones). */
+  officeAvailable(): Promise<boolean>;
   /** URL que el webview puede cargar para un archivo local ya permitido. */
   mediaUrl(path: string): string;
   reportOutputError(message: string): Promise<void>;
   /** Escribe un error de la interfaz en el registro de la app. */
   logError(message: string): Promise<void>;
   onOutputError(handler: (message: string) => void): Promise<() => void>;
+  /** Avanzar (true) o retroceder lo que está en pantalla; lo pide la ventana de salida al pulsar una flecha. */
+  outputNavigate(forward: boolean): Promise<void>;
+  onOutputNavigate(handler: (forward: boolean) => void): Promise<() => void>;
   listBibles(): Promise<BibleInfo[]>;
   /** Abre el selector de archivos XML; devuelve las Biblias importadas ([] si se cancela). */
   importBibles(title: string, filterName: string): Promise<BibleInfo[]>;
   removeBible(id: string): Promise<void>;
   getChapter(bibleId: string, book: number, chapter: number): Promise<Verse[]>;
   searchBible(bibleId: string, query: string): Promise<SearchHit[]>;
+
+  // Base de datos local
+  settingsGet(): Promise<StoredSettings>;
+  settingsSet(key: string, value: unknown): Promise<void>;
+  /** Vuelve al valor inicial esas claves ([] = todas) y devuelve los ajustes que quedan. */
+  settingsReset(keys: string[]): Promise<StoredSettings>;
+  /** Cada cambio de ajustes, hecho desde cualquier ventana. */
+  onSettingsChanged(handler: (settings: StoredSettings) => void): Promise<() => void>;
+  /** Archivo de la base; null si se trabaja en memoria porque no se pudo abrir. */
+  storePath(): Promise<string | null>;
+  songsList(): Promise<Song[]>;
+  songSave(song: Song): Promise<void>;
+  songDelete(id: string): Promise<void>;
+  setlistGet(): Promise<string[]>;
+  setlistSet(ids: string[]): Promise<void>;
+  /** Borra la biblioteca de letras y la lista. */
+  songsReset(): Promise<void>;
 
   // Transmisión con OBS
   obsDetect(): Promise<ObsDetection>;

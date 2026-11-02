@@ -1,7 +1,18 @@
 <script lang="ts" module>
   import type { OutputStyle } from "$lib/platform";
 
-  export const DEFAULT_STYLE: OutputStyle = { fontScale: 1, align: "center", position: "middle", background: "black" };
+  export const DEFAULT_STYLE: OutputStyle = {
+    fontScale: 1,
+    align: "center",
+    position: "middle",
+    background: "black",
+    font: "system",
+    backgroundImage: null,
+    logo: { image: null, corner: "topRight", size: "medium", opacity: 0.6 },
+  };
+
+  /** Alto del logo según el tamaño elegido, en % del alto de la pantalla. */
+  const LOGO_HEIGHT: Record<OutputStyle["logo"]["size"], number> = { small: 8, medium: 12, large: 18 };
 
   const BACKGROUNDS: Record<OutputStyle["background"], string> = {
     black: "#000000",
@@ -15,7 +26,9 @@
   // así la vista previa se ve igual que la pantalla real.
   import { platform, type OutputContent } from "$lib/platform";
   import { renderPage } from "$lib/pdf";
-  import { t } from "$lib/i18n/index.svelte";
+  import { formatClock, formatCountdown, timerRemaining } from "$lib/clock";
+  import { fontFamily } from "$lib/fonts";
+  import { i18n, t } from "$lib/i18n/index.svelte";
 
   let {
     content,
@@ -38,21 +51,54 @@
   let body = $state<HTMLDivElement>();
   let width = $state(0);
   let height = $state(0);
+  let now = $state(Date.now());
 
   let src = $derived("path" in content ? platform.mediaUrl(content.path) : "");
   let name = $derived(("path" in content ? content.path.split(/[\\/]/).pop() : "") ?? "");
 
   let lyric = $derived.by(() => {
-    if (content.kind === "text") return { text: content.slides[content.index] ?? "", reference: "", copyright: "" };
+    if (content.kind === "text") {
+      return {
+        text: content.slides[content.index] ?? "",
+        reference: "",
+        // La autoría de una letra va solo en la primera diapositiva.
+        copyright: content.index === 0 ? (content.credit ?? "") : "",
+        second: null,
+      };
+    }
     if (content.kind === "scripture") {
       const verse = content.verses[content.index];
+      const second = content.second && verse?.second ? verse.second : null;
       return {
         text: verse?.text ?? "",
         reference: verse ? `${verse.reference} · ${content.version}` : "",
-        copyright: content.copyright,
+        copyright: [content.copyright, content.second?.copyright].filter(Boolean).join(" · "),
+        second: second && { text: second.text, reference: `${second.reference} · ${content.second!.version}` },
       };
     }
     return null;
+  });
+
+  let clock = $derived.by(() => {
+    if (content.kind === "clock") return { text: formatClock(new Date(now), i18n.locale, content.hour12, content.seconds), expired: false };
+    if (content.kind === "timer") {
+      const remaining = timerRemaining(content, now);
+      return { text: formatCountdown(remaining), expired: remaining <= 0 };
+    }
+    return null;
+  });
+
+  // La imagen de fondo va detrás del texto, la Biblia y el reloj, y queda sola al quitar el contenido.
+  // Una letra puede traer la suya.
+  // El logo va encima de todo menos de la pantalla en negro y del patrón de prueba.
+  let logo = $derived(
+    style.logo?.image && content.kind !== "black" && content.kind !== "testPattern" ? platform.mediaUrl(style.logo.image) : null,
+  );
+
+  let backdrop = $derived.by(() => {
+    if (!lyric && !clock && content.kind !== "empty") return null;
+    const path = (content.kind === "text" && content.background) || style.backgroundImage;
+    return path ? platform.mediaUrl(path) : null;
   });
 
   function videoError() {
@@ -71,6 +117,13 @@
   });
 
   $effect(() => {
+    if (content.kind !== "clock" && content.kind !== "timer") return;
+    now = Date.now();
+    const timer = setInterval(() => (now = Date.now()), 200);
+    return () => clearInterval(timer);
+  });
+
+  $effect(() => {
     if (!canvas || content.kind !== "pdf" || width === 0 || height === 0) return;
     const controller = new AbortController();
     renderPage(src, content.page, canvas, { width, height }, controller.signal).catch(() =>
@@ -82,7 +135,7 @@
   // Ajuste automático: el texto usa el tamaño máximo elegido y se reduce lo justo para caber.
   // Así un versículo largo no se corta y uno corto no queda diminuto.
   $effect(() => {
-    void [lyric?.text, lyric?.reference, style.fontScale, style.position, width, height];
+    void [lyric?.text, lyric?.reference, lyric?.second?.text, style.fontScale, style.position, style.font, width, height];
     if (!stage || !body || height === 0) return;
     const fits = () => body!.scrollHeight <= stage!.clientHeight + 1 && body!.scrollWidth <= stage!.clientWidth + 1;
     let low = height * 0.022;
@@ -103,10 +156,17 @@
   class="view"
   class:preview
   class:pattern={content.kind === "testPattern"}
+  class:expired={clock?.expired}
+  class:logo-bottom={logo !== null && style.logo.corner.startsWith("bottom")}
   style:background-color={BACKGROUNDS[style.background]}
+  style:font-family={fontFamily(style.font)}
   bind:clientWidth={width}
   bind:clientHeight={height}
 >
+  {#if backdrop}
+    <img class="backdrop" src={backdrop} alt="" />
+    <div class="shade"></div>
+  {/if}
   {#if lyric}
     <div
       class="stage pos-{style.position}"
@@ -117,9 +177,17 @@
       <div class="body" bind:this={body}>
         <p class="text">{lyric.text}</p>
         {#if lyric.reference}<p class="reference">{lyric.reference}</p>{/if}
+        {#if lyric.second}
+          <hr class="divider" />
+          <p class="text second">{lyric.second.text}</p>
+          <p class="reference">{lyric.second.reference}</p>
+        {/if}
       </div>
     </div>
     {#if lyric.copyright}<p class="copyright">{lyric.copyright}</p>{/if}
+  {:else if clock}
+    <!-- Tan grande como quepa a lo ancho: «10:45:30 p. m.» es mucho más largo que «5:00». -->
+    <p class="clock" style:font-size="min(30cqh, {Math.round(150 / clock.text.length)}cqw)">{clock.text}</p>
   {:else if content.kind === "image"}
     <img {src} alt="" onerror={() => onerror?.(t("error.image", { name }))} />
   {:else if content.kind === "video"}
@@ -136,6 +204,16 @@
     <div class="corner br"></div>
     <p class="pattern-title">{t("pattern.title")}</p>
     {#if diagnostics}<p class="diag">{diagnostics}</p>{/if}
+  {/if}
+  {#if logo}
+    <img
+      class="logo {style.logo.corner}"
+      src={logo}
+      alt=""
+      style:height="{LOGO_HEIGHT[style.logo.size]}cqh"
+      style:opacity={style.logo.opacity}
+      onerror={() => onerror?.(t("error.image", { name: style.logo.image?.split(/[\\/]/).pop() ?? "" }))}
+    />
   {/if}
 </div>
 
@@ -154,7 +232,6 @@
     align-items: center;
     justify-content: center;
     overflow: hidden;
-    font-family: "Inter", "Segoe UI", system-ui, sans-serif;
   }
   /* Las vistas previas nunca reciben el ratón: no pueden tapar los controles de la consola. */
   .view.preview { pointer-events: none; }
@@ -202,6 +279,54 @@
     line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+  }
+  /* Marca de agua: encima de cualquier contenido, en una esquina, sin tapar el texto (que deja un 6 % de margen). */
+  .logo {
+    position: absolute;
+    z-index: 2;
+    width: auto;
+    max-width: 22cqw;
+    object-fit: contain;
+    pointer-events: none;
+  }
+  /* Con el logo abajo, el copyright se estrecha para no quedar debajo del logo. */
+  .view.logo-bottom .copyright { left: 26cqw; right: 26cqw; }
+  .logo.topLeft { top: 3cqh; left: 2.5cqw; }
+  .logo.topRight { top: 3cqh; right: 2.5cqw; }
+  .logo.bottomLeft { bottom: 3cqh; left: 2.5cqw; }
+  .logo.bottomRight { bottom: 3cqh; right: 2.5cqw; }
+  .backdrop {
+    position: absolute;
+    inset: 0;
+    object-fit: cover;
+  }
+  /* Oscurece la imagen lo justo para que el texto se lea sobre cualquier fondo. */
+  .shade {
+    position: absolute;
+    inset: 0;
+    background: rgb(0 0 0 / 0.4);
+  }
+  .divider {
+    width: 30%;
+    margin: 0.7em auto;
+    border: 0;
+    border-top: 0.06em solid rgb(245 245 240 / 0.45);
+  }
+  .text.second { color: rgb(245 245 240 / 0.88); }
+  .clock {
+    position: relative;
+    margin: 0;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+    text-shadow: 0 0.03em 0.1em rgb(0 0 0 / 0.55);
+  }
+  /* Tiempo cumplido: fondo rojo que late despacio, visible desde el púlpito. */
+  .view.expired { animation: expired 1.6s ease-in-out infinite alternate; }
+  .view.expired .backdrop, .view.expired .shade { display: none; }
+  @keyframes expired {
+    from { background-color: #b0151c; }
+    to { background-color: #e0262e; }
   }
   img,
   video {
