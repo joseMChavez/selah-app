@@ -1,7 +1,7 @@
 // Único archivo de la interfaz que importa APIs de Tauri. Migrar a Electron = reescribir este archivo.
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { OutputState, Platform, StoredSettings } from "./types";
+import type { OfficeProgress, OutputState, Platform, StoredSettings } from "./types";
 
 export const tauriPlatform: Platform = {
   listMonitors: () => invoke("list_monitors"),
@@ -17,6 +17,11 @@ export const tauriPlatform: Platform = {
   allowBackgrounds: (paths) => invoke("allow_backgrounds", { paths }),
   convertPresentation: (path) => invoke("convert_presentation", { path }),
   officeAvailable: () => invoke("office_available"),
+  officeStatus: () => invoke("office_status"),
+  officeInstall: () => invoke("office_install"),
+  officeCancel: () => invoke("office_cancel"),
+  officeRemove: () => invoke("office_remove"),
+  onOfficeProgress: (handler) => listen<OfficeProgress>("office-progress", (event) => handler(event.payload)),
   mediaUrl: (path) => convertFileSrc(path),
   reportOutputError: (message) => invoke("report_output_error", { message }),
   logError: (message) => invoke("log_client_error", { message }),

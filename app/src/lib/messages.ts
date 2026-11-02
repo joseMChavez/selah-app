@@ -22,6 +22,9 @@ export function toMessage(e: unknown): Message {
     case "obs": return { key: "error.obs", params: { message: err.message } };
     case "officeNotInstalled": return { key: "error.officeNotInstalled" };
     case "conversionFailed": return { key: "error.conversionFailed", params: { file: err.file, reason: err.reason } };
+    case "officeBusy": return { key: "error.officeBusy" };
+    case "officeCanceled": return { key: "error.officeCanceled" };
+    case "officeDownload": return { key: "error.officeDownload", params: { message: err.message } };
     case "storage": return { key: "error.storage", params: { message: err.message } };
     case "internal": return { key: "error.internal", params: { message: err.message } };
     default: return { key: "error.internal", params: { message: String(e) } };

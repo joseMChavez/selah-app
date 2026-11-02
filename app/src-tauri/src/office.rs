@@ -1,7 +1,7 @@
 // Presentaciones (PowerPoint, Impress, Keynote) → PDF; luego se muestran como cualquier PDF.
 // Un webview no sabe dibujar un PPTX, así que se convierte con lo que haya en el equipo, en este orden:
-// Windows: PowerPoint (COM) y LibreOffice; macOS: Keynote, PowerPoint y LibreOffice; Linux: LibreOffice.
-// Si uno falla se prueba el siguiente. La conversión se guarda en caché y se rehace si el archivo cambia.
+// LibreOffice (el del sistema o la copia privada de Selah, libreoffice.rs), que es el que mejor funciona;
+// luego PowerPoint (COM) en Windows, y Keynote y PowerPoint en macOS. Si uno falla se prueba el siguiente. La conversión se guarda en caché y se rehace si el archivo cambia.
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
@@ -17,6 +17,13 @@ const TIMEOUT: Duration = Duration::from_secs(180);
 /// Las conversiones se hacen de una en una: LibreOffice no admite dos a la vez con el mismo perfil,
 /// y PowerPoint y Keynote son una sola aplicación compartida.
 static CONVERTING: Mutex<()> = Mutex::new(());
+
+/// soffice de la copia privada (libreoffice.rs), si la hay. Se fija al arrancar y al instalarla o borrarla.
+static PRIVATE_SOFFICE: Mutex<Option<PathBuf>> = Mutex::new(None);
+
+pub fn set_private_soffice(path: Option<PathBuf>) {
+    *PRIVATE_SOFFICE.lock().unwrap_or_else(|e| e.into_inner()) = path;
+}
 
 const POWERPOINT_MAC: &str = "/Applications/Microsoft PowerPoint.app";
 const KEYNOTE: &str = "/Applications/Keynote.app";
@@ -88,9 +95,13 @@ impl Converter {
     }
 }
 
-/// Los convertidores de este equipo, en orden de preferencia. En Mac, Keynote primero: viene con el sistema.
+/// Los convertidores de este equipo, en orden de preferencia: LibreOffice primero; en Mac, luego Keynote.
 fn converters() -> Vec<Converter> {
     let mut list = Vec::new();
+    let private = || PRIVATE_SOFFICE.lock().unwrap_or_else(|e| e.into_inner()).clone().filter(|p| p.is_file());
+    if let Some(soffice) = find_soffice().or_else(private) {
+        list.push(Converter::LibreOffice(soffice));
+    }
     if cfg!(windows) && powerpoint_windows_installed() {
         list.push(Converter::PowerPointWindows);
     }
@@ -101,9 +112,6 @@ fn converters() -> Vec<Converter> {
         if Path::new(POWERPOINT_MAC).exists() {
             list.push(Converter::PowerPointMac);
         }
-    }
-    if let Some(soffice) = find_soffice() {
-        list.push(Converter::LibreOffice(soffice));
     }
     list
 }
@@ -121,7 +129,7 @@ fn powerpoint_windows_installed() -> bool {
     command.status().is_ok_and(|s| s.success())
 }
 
-/// Ejecutable de LibreOffice: primero el del PATH, luego las rutas de instalación habituales.
+/// LibreOffice instalado en el sistema: primero el del PATH, luego las rutas de instalación habituales.
 pub fn find_soffice() -> Option<PathBuf> {
     let exe = if cfg!(windows) { "soffice.exe" } else { "soffice" };
     if let Some(found) = std::env::var_os("PATH")

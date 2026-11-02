@@ -2,6 +2,7 @@
 // El backend guarda qué hay en pantalla para que la salida pueda recuperarlo si se recarga.
 // Ajustes, letras y lista del culto viven en una base SQLite local (store.rs).
 mod bible;
+mod libreoffice;
 mod obs;
 mod office;
 mod picker;
@@ -256,6 +257,11 @@ enum CommandError {
     /// Para mostrar presentaciones hace falta LibreOffice.
     OfficeNotInstalled,
     ConversionFailed { file: String, reason: String },
+    /// Ya se está descargando LibreOffice (o borrando la copia).
+    OfficeBusy,
+    /// El usuario canceló la descarga.
+    OfficeCanceled,
+    OfficeDownload { message: String },
     /// No se pudo leer o escribir la base de datos local.
     Storage { message: String },
     Internal { message: String },
@@ -887,6 +893,82 @@ fn office_available() -> bool {
     office::available()
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OfficeStatus {
+    /// LibreOffice instalado en el sistema.
+    system: bool,
+    /// La copia privada de Selah está lista.
+    private_copy: bool,
+    /// Hay copia privada para este sistema.
+    downloadable: bool,
+    installing: bool,
+    version: &'static str,
+    /// Tamaño de la descarga en bytes.
+    size: u64,
+}
+
+impl From<libreoffice::InstallError> for CommandError {
+    fn from(e: libreoffice::InstallError) -> Self {
+        match e {
+            libreoffice::InstallError::Busy => CommandError::OfficeBusy,
+            libreoffice::InstallError::Canceled => CommandError::OfficeCanceled,
+            libreoffice::InstallError::Failed(message) => CommandError::OfficeDownload { message },
+        }
+    }
+}
+
+#[tauri::command]
+fn office_status(app: AppHandle) -> Result<OfficeStatus, CommandError> {
+    let data = app.path().app_data_dir().map_err(internal)?;
+    Ok(OfficeStatus {
+        system: office::find_soffice().is_some(),
+        private_copy: libreoffice::soffice(&data).is_some(),
+        downloadable: libreoffice::package().is_some(),
+        installing: libreoffice::installing(),
+        version: libreoffice::VERSION,
+        size: libreoffice::package().map_or(0, |p| p.size),
+    })
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OfficeProgress {
+    downloaded: u64,
+    total: u64,
+    extracting: bool,
+}
+
+/// Descarga la copia privada de LibreOffice (solo cuando el usuario lo pide). Avisa del avance con «office-progress».
+#[tauri::command]
+async fn office_install(app: AppHandle) -> Result<(), CommandError> {
+    let data = app.path().app_data_dir().map_err(internal)?;
+    let emitter = app.clone();
+    let soffice = libreoffice::install(&data, move |p| {
+        let _ = emitter.emit(
+            "office-progress",
+            OfficeProgress { downloaded: p.downloaded, total: p.total, extracting: p.extracting },
+        );
+    })
+    .await?;
+    eprintln!("[libreoffice] copia lista: {}", soffice.display());
+    office::set_private_soffice(Some(soffice));
+    Ok(())
+}
+
+#[tauri::command]
+fn office_cancel() {
+    libreoffice::cancel();
+}
+
+#[tauri::command]
+fn office_remove(app: AppHandle) -> Result<(), CommandError> {
+    let data = app.path().app_data_dir().map_err(internal)?;
+    office::set_private_soffice(None);
+    libreoffice::remove(&data)?;
+    Ok(())
+}
+
 /// Elige una imagen o GIF de fondo. None si se cancela.
 #[tauri::command]
 async fn pick_background(
@@ -1003,6 +1085,7 @@ pub fn run() {
             // La base se abre antes que nada: la interfaz lee sus ajustes al cargar.
             let dir = app.path().app_data_dir()?;
             *app.state::<AppState>().store.lock().unwrap() = Some(store::Store::open(&dir));
+            office::set_private_soffice(libreoffice::soffice(&dir));
             // Las Biblias se leen en segundo plano al arrancar, para que estén listas al abrir el panel.
             let handle = app.handle().clone();
             std::thread::spawn(move || {
@@ -1046,6 +1129,10 @@ pub fn run() {
             pick_background,
             convert_presentation,
             office_available,
+            office_status,
+            office_install,
+            office_cancel,
+            office_remove,
             allow_backgrounds,
             pick_media,
             pick_media_folder,
