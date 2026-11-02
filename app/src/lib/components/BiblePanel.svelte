@@ -1,12 +1,13 @@
 <script lang="ts">
   // Navegación de la Biblia en tres pasos: libro → capítulo → versículo.
   // El buscador es un atajo: «Juan 3:16», «Sal 23» o palabras.
-  import { onMount, tick } from "svelte";
+  import { onMount, tick, untrack } from "svelte";
   import { bookName, type BookLanguage } from "$lib/bible/books";
   import { parseQuery } from "$lib/bible/reference";
   import { i18n, locales, t, type Locale } from "$lib/i18n/index.svelte";
   import { toMessage, type Message } from "$lib/messages";
   import { platform, type BibleInfo, type OutputContent, type SearchHit, type Verse } from "$lib/platform";
+  import { setSetting, settings } from "$lib/settings.svelte";
 
   let {
     prepared,
@@ -23,29 +24,39 @@
     onerror: (message: Message) => void;
   } = $props();
 
-  const STORAGE_KEY = "selah.bible";
   const FIRST_NEW_TESTAMENT_BOOK = 40;
 
   type View =
     | { step: "books" }
     | { step: "chapters"; book: number }
-    | { step: "verses"; book: number; chapter: number; verses: Verse[]; range: [number, number] | null }
+    | {
+        step: "verses";
+        book: number;
+        chapter: number;
+        verses: Verse[];
+        /** El mismo capítulo en la segunda versión (null si no hay o no lo tiene). */
+        second: Verse[] | null;
+        range: [number, number] | null;
+      }
     | { step: "search"; query: string; hits: SearchHit[] }
     | { step: "notFound"; reference: string };
 
   let bibles = $state<BibleInfo[]>([]);
   let loading = $state(true);
-  let bibleId = $state<string | null>(null);
+  // La versión elegida se guarda en los ajustes; si ya no existe, se usa la primera.
+  let bibleId = $derived(bibles.some((b) => b.id === settings.bible) ? settings.bible : (bibles[0]?.id ?? null));
+  /** Segunda versión que se muestra debajo de la primera; null = solo una. */
+  let secondId = $derived(settings.bible2);
   let query = $state("");
   let view = $state<View>({ step: "books" });
   let input = $state<HTMLInputElement>();
   let verseList = $state<HTMLOListElement>();
 
   let bible = $derived(bibles.find((b) => b.id === bibleId) ?? null);
+  let secondBible = $derived(secondId !== bibleId ? (bibles.find((b) => b.id === secondId) ?? null) : null);
   // Los nombres de libro siguen el idioma de la Biblia, no el de la interfaz.
-  let language = $derived<BookLanguage>(
-    bible?.language && bible.language in locales ? (bible.language as BookLanguage) : i18n.locale,
-  );
+  let language = $derived(languageOf(bible));
+  let secondLanguage = $derived(languageOf(secondBible));
   let parsed = $derived(parseQuery(query, language));
   let suggestions = $derived(query.trim() && !parsed.reference ? parsed.books.slice(0, 6) : []);
   let preparedRef = $derived(prepared.kind === "scripture" ? prepared.verses[prepared.index]?.reference : null);
@@ -53,6 +64,10 @@
   let groups = $derived(groupByLanguage(bibles));
   let oldTestament = $derived(bible?.books.filter((b) => b.number < FIRST_NEW_TESTAMENT_BOOK) ?? []);
   let newTestament = $derived(bible?.books.filter((b) => b.number >= FIRST_NEW_TESTAMENT_BOOK) ?? []);
+
+  function languageOf(b: BibleInfo | null): BookLanguage {
+    return b?.language && b.language in locales ? (b.language as BookLanguage) : i18n.locale;
+  }
 
   function groupByLanguage(list: BibleInfo[]) {
     const map = new Map<string, BibleInfo[]>();
@@ -66,18 +81,22 @@
     }));
   }
 
-  function remember(id: string) {
-    try {
-      localStorage.setItem(STORAGE_KEY, id);
-    } catch {
-      // Sin almacenamiento: se elige la primera la próxima vez.
-    }
+  function selectBible(id: string) {
+    setSetting("bible", id);
   }
 
-  function selectBible(id: string) {
-    bibleId = id;
-    remember(id);
-    // Al cambiar de versión se recarga lo que se estaba viendo, para no mezclar textos de dos versiones.
+  function selectSecond(id: string) {
+    setSetting("bible2", id || null);
+  }
+
+  // Cambie desde aquí o desde Ajustes (también al restablecer), lo que se está viendo se recarga.
+  $effect(() => {
+    void [bible?.id, secondBible?.id];
+    untrack(reload);
+  });
+
+  // Al cambiar de versión se recarga lo que se estaba viendo, para no mezclar textos de dos versiones.
+  function reload() {
     if (view.step === "verses") openChapter(view.book, view.chapter, view.range);
     else if (view.step === "search") search(view.query);
   }
@@ -89,23 +108,13 @@
       onerror(toMessage(e));
     }
     loading = false;
-    let saved: string | null = null;
-    try {
-      saved = localStorage.getItem(STORAGE_KEY);
-    } catch {
-      // Ignorado.
-    }
-    const pick = [preferred, bibleId, saved].find((id) => id && bibles.some((b) => b.id === id));
-    bibleId = pick ?? bibles[0]?.id ?? null;
+    if (preferred) setSetting("bible", preferred);
   }
 
   async function importBibles() {
     try {
       const imported = await platform.importBibles(t("bible.dialogTitle"), t("bible.dialogFilter"));
-      if (imported.length > 0) {
-        await loadBibles(imported[0].id);
-        remember(imported[0].id);
-      }
+      if (imported.length > 0) await loadBibles(imported[0].id);
     } catch (e) {
       onerror(toMessage(e));
     }
@@ -115,21 +124,32 @@
     return `${bookName(book, language)} ${chapter}${verse ? `:${verse}` : ""}`;
   }
 
-  function scripture(book: number, chapter: number, verses: Verse[], start: number): OutputContent | null {
+  function scripture(book: number, chapter: number, verses: Verse[], start: number, second: Verse[] | null): OutputContent | null {
     if (!bible) return null;
     const index = verses.findIndex((v) => v.number === start);
+    const parallel = (n: number) => {
+      const text = second?.find((v) => v.number === n)?.text;
+      return text ? { reference: `${bookName(book, secondLanguage)} ${chapter}:${n}`, text } : null;
+    };
     return {
       kind: "scripture",
-      verses: verses.map((v) => ({ reference: refText(book, chapter, v.number), text: v.text })),
+      verses: verses.map((v) => ({ reference: refText(book, chapter, v.number), text: v.text, second: parallel(v.number) })),
       index: Math.max(index, 0),
       version: bible.abbreviation,
       copyright: bible.copyright,
+      second: secondBible && second ? { version: secondBible.abbreviation, copyright: secondBible.copyright } : null,
     };
   }
 
-  function prepareFrom(book: number, chapter: number, verses: Verse[], start: number) {
-    const content = scripture(book, chapter, verses, start);
+  function prepareFrom(book: number, chapter: number, verses: Verse[], start: number, second: Verse[] | null) {
+    const content = scripture(book, chapter, verses, start, second);
     if (content) onprepare(content);
+  }
+
+  /** El capítulo en la segunda versión; null si no hay segunda o ella no lo tiene. */
+  async function secondChapter(book: number, chapter: number): Promise<Verse[] | null> {
+    if (!secondBible) return null;
+    return platform.getChapter(secondBible.id, book, chapter).catch(() => null);
   }
 
   async function scrollToVerse(n: number) {
@@ -140,18 +160,18 @@
   async function openChapter(book: number, chapter: number, range: [number, number] | null, prepareVerse?: number) {
     if (!bible) return;
     try {
-      const verses = await platform.getChapter(bible.id, book, chapter);
-      view = { step: "verses", book, chapter, verses, range };
+      const [verses, second] = await Promise.all([platform.getChapter(bible.id, book, chapter), secondChapter(book, chapter)]);
+      view = { step: "verses", book, chapter, verses, second, range };
       if (range) {
         const inRange = verses.filter((v) => v.number >= range[0] && v.number <= range[1]);
         if (inRange.length === 0) {
           view = { step: "notFound", reference: `${refText(book, chapter)}:${range[0]}` };
           return;
         }
-        prepareFrom(book, chapter, inRange, inRange[0].number);
+        prepareFrom(book, chapter, inRange, inRange[0].number, second);
         scrollToVerse(inRange[0].number);
       } else if (prepareVerse) {
-        prepareFrom(book, chapter, verses, prepareVerse);
+        prepareFrom(book, chapter, verses, prepareVerse, second);
         scrollToVerse(prepareVerse);
       }
     } catch (e) {
@@ -202,12 +222,12 @@
   /** La serie que recorre un versículo: dentro del rango buscado, solo el rango; fuera, el capítulo entero. */
   function verseContent(verse: Verse): OutputContent | null {
     if (view.step !== "verses") return null;
-    const { book, chapter, verses, range } = view;
+    const { book, chapter, verses, second, range } = view;
     if (range && verse.number >= range[0] && verse.number <= range[1]) {
-      return scripture(book, chapter, verses.filter((v) => v.number >= range[0] && v.number <= range[1]), verse.number);
+      return scripture(book, chapter, verses.filter((v) => v.number >= range[0] && v.number <= range[1]), verse.number, second);
     }
     view = { ...view, range: null };
-    return scripture(book, chapter, verses, verse.number);
+    return scripture(book, chapter, verses, verse.number, second);
   }
 
   // Sin desplazar la lista: si se moviera entre los dos clics, el doble clic caería en otro versículo.
@@ -274,11 +294,28 @@
         <button class="btn" onclick={importBibles}>{t("bible.import")}</button>
       </div>
 
-      {#if bible}
-        <p class="copyright" class:missing={!bible.copyright}>
-          {bible.copyright ? bible.copyright : t("bible.noCopyright")}
-        </p>
-      {/if}
+      <label class="grow">
+        <span class="label">{t("bible.secondVersion")}</span>
+        <select class="field" value={secondBible?.id ?? ""} onchange={(e) => selectSecond(e.currentTarget.value)}>
+          <option value="">{t("bible.secondNone")}</option>
+          {#each groups as group (group.label)}
+            <optgroup label={group.label}>
+              {#each group.items.filter((b) => b.id !== bibleId) as b (b.id)}
+                <option value={b.id}>{b.abbreviation} — {b.name}</option>
+              {/each}
+            </optgroup>
+          {/each}
+        </select>
+      </label>
+
+      {#each [bible, secondBible] as b, i (i)}
+        {#if b}
+          <p class="copyright" class:missing={!b.copyright}>
+            {#if secondBible}<strong>{b.abbreviation}:</strong>{/if}
+            {b.copyright ? b.copyright : t("bible.noCopyright")}
+          </p>
+        {/if}
+      {/each}
 
       <form class="search" onsubmit={submit}>
         <input
@@ -375,7 +412,13 @@
                 ondblclick={() => doubleClickVerse(verse)}
               >
                 <span class="num">{verse.number}</span>
-                <span class="vtext">{verse.text}</span>
+                <span class="vtext">
+                  {verse.text}
+                  {#if view.second}
+                    {@const other = view.second.find((v) => v.number === verse.number)}
+                    {#if other}<span class="vsecond">{other.text}</span>{/if}
+                  {/if}
+                </span>
                 {#if ref === liveRef}<span class="tag live">{t("live.badge")}</span>{/if}
               </button>
             </li>
@@ -507,6 +550,7 @@
   .num { min-width: 1.8em; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
   .ref { min-width: 7.5em; font-weight: 650; color: var(--accent); }
   .vtext { flex: 1; }
+  .vsecond { display: block; margin-top: 2px; font-size: 14px; color: var(--muted); }
   .tag.live {
     align-self: center;
     font-size: 11px;

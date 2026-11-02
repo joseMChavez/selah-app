@@ -1,7 +1,9 @@
 // Consola + ventana de salida en un monitor elegido, medios y Biblias.
 // El backend guarda qué hay en pantalla para que la salida pueda recuperarlo si se recarga.
+// Ajustes, letras y lista del culto viven en una base SQLite local (store.rs).
 mod bible;
 mod obs;
+mod store;
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -17,6 +19,8 @@ const MAIN_LABEL: &str = "main";
 const OUTPUT_LABEL: &str = "output";
 const OUTPUT_STATE_EVENT: &str = "output-state";
 const OUTPUT_ERROR_EVENT: &str = "output-error";
+/// Lleva todos los ajustes tras cada cambio: así la ventana de salida sigue el idioma de la consola.
+const SETTINGS_EVENT: &str = "settings-changed";
 
 const IMAGE_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png", "webp", "gif", "bmp", "svg", "avif"];
 const VIDEO_EXTENSIONS: &[&str] = &["mp4", "m4v", "mov", "webm", "mkv", "ogv"];
@@ -46,6 +50,12 @@ enum OutputContent {
     Text {
         slides: Vec<String>,
         index: usize,
+        /// Autoría de una letra (cantante, escritor); se muestra en la primera diapositiva.
+        #[serde(default)]
+        credit: String,
+        /// Imagen o GIF propio de esta letra; tapa el fondo general.
+        #[serde(default)]
+        background: Option<String>,
     },
     Image {
         path: String,
@@ -64,12 +74,44 @@ enum OutputContent {
         index: usize,
         version: String,
         copyright: String,
+        /// Segunda versión, debajo de la primera (por ejemplo, en otro idioma). Como mucho dos.
+        #[serde(default)]
+        second: Option<SecondVersion>,
+    },
+    /// Hora actual; la dibuja la salida con su propio reloj.
+    Clock {
+        hour12: bool,
+        seconds: bool,
+    },
+    /// Cuenta atrás. En marcha si ends_at (ms desde 1970) tiene valor; en pausa guarda lo que queda.
+    /// Al llegar a cero sigue contando el tiempo excedido con el fondo en rojo.
+    Timer {
+        duration_ms: u64,
+        ends_at: Option<u64>,
+        remaining_ms: i64,
     },
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct SecondVersion {
+    version: String,
+    copyright: String,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ScriptureVerse {
+    reference: String,
+    text: String,
+    /// El mismo versículo en la segunda versión; None si esa versión no lo tiene.
+    #[serde(default)]
+    second: Option<ParallelVerse>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ParallelVerse {
     reference: String,
     text: String,
 }
@@ -101,6 +143,19 @@ enum Background {
     Charcoal,
 }
 
+/// Tipos de letra incluidos en la app (no dependen de las fuentes instaladas en cada equipo).
+#[derive(Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum Font {
+    #[default]
+    System,
+    Montserrat,
+    Oswald,
+    BebasNeue,
+    Lora,
+    Merriweather,
+}
+
 /// Cómo se coloca el texto en la pantalla. Se aplica a lo que está al aire en cuanto cambia.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -110,6 +165,11 @@ struct OutputStyle {
     align: TextAlign,
     position: VerticalPosition,
     background: Background,
+    #[serde(default)]
+    font: Font,
+    /// Imagen o GIF detrás del texto, la Biblia y el reloj.
+    #[serde(default)]
+    background_image: Option<String>,
 }
 
 impl Default for OutputStyle {
@@ -119,6 +179,8 @@ impl Default for OutputStyle {
             align: TextAlign::Center,
             position: VerticalPosition::Middle,
             background: Background::Black,
+            font: Font::System,
+            background_image: None,
         }
     }
 }
@@ -127,6 +189,7 @@ impl OutputContent {
     fn media_path(&self) -> Option<&str> {
         match self {
             Self::Image { path } | Self::Video { path, .. } | Self::Pdf { path, .. } => Some(path),
+            Self::Text { background, .. } => background.as_deref(),
             _ => None,
         }
     }
@@ -146,6 +209,8 @@ enum CommandError {
     ObsRunning,
     ObsNotConnected,
     Obs { message: String },
+    /// No se pudo leer o escribir la base de datos local.
+    Storage { message: String },
     Internal { message: String },
 }
 
@@ -207,6 +272,25 @@ struct AppState {
     bibles: Mutex<bible::Library>,
     /// Conexión con OBS; None si no hay. Mutex de tokio: se mantiene durante las peticiones.
     obs: tauri::async_runtime::Mutex<Option<obws::Client>>,
+    /// Se abre al arrancar (setup); None solo antes de eso.
+    store: Mutex<Option<store::Store>>,
+}
+
+fn with_store<T>(
+    state: &AppState,
+    action: impl FnOnce(&mut store::Store) -> rusqlite::Result<T>,
+) -> Result<T, CommandError> {
+    let mut guard = state.store.lock().unwrap();
+    let store = guard.as_mut().ok_or_else(|| CommandError::Storage {
+        message: "la base de datos aún no está lista".into(),
+    })?;
+    action(store).map_err(|e| CommandError::Storage { message: e.to_string() })
+}
+
+fn emit_settings(app: &AppHandle, state: &AppState) -> Result<serde_json::Map<String, serde_json::Value>, CommandError> {
+    let settings = with_store(state, |store| store.settings())?;
+    let _ = app.emit(SETTINGS_EVENT, &settings);
+    Ok(settings)
 }
 
 impl From<obs::ObsError> for CommandError {
@@ -354,11 +438,12 @@ fn set_output_content(
     content: OutputContent,
 ) -> Result<OutputState, CommandError> {
     let deck_len = match &content {
-        OutputContent::Text { slides, index } => Some((slides.len(), *index)),
+        OutputContent::Text { slides, index, .. } => Some((slides.len(), *index)),
         OutputContent::Scripture { verses, index, .. } => Some((verses.len(), *index)),
         _ => None,
     };
-    if deck_len.is_some_and(|(len, index)| index >= len) {
+    let empty_timer = matches!(content, OutputContent::Timer { duration_ms: 0, .. });
+    if empty_timer || deck_len.is_some_and(|(len, index)| index >= len) {
         return Err(CommandError::InvalidContent);
     }
     if let Some(path) = content.media_path() {
@@ -686,8 +771,117 @@ fn report_output_error(app: AppHandle, message: String) {
 }
 
 #[tauri::command]
-fn set_output_style(app: AppHandle, state: State<'_, AppState>, style: OutputStyle) -> OutputState {
+fn set_output_style(app: AppHandle, state: State<'_, AppState>, mut style: OutputStyle) -> OutputState {
+    // Un fondo que ya no existe (archivo movido, otro equipo) se quita en vez de dejar la pantalla rota.
+    if let Some(path) = style.background_image.as_deref() {
+        let path = Path::new(path);
+        if !path.is_file() || allow_media(&app, path).is_err() {
+            style.background_image = None;
+        }
+    }
     publish(&app, &state, |output| output.style = style)
+}
+
+/// Elige una imagen o GIF de fondo. None si se cancela.
+#[tauri::command]
+async fn pick_background(
+    app: AppHandle,
+    title: String,
+    filter_name: String,
+) -> Result<Option<String>, CommandError> {
+    let Some(file) = app
+        .dialog()
+        .file()
+        .set_title(title)
+        .add_filter(filter_name, IMAGE_EXTENSIONS)
+        .blocking_pick_file()
+    else {
+        return Ok(None);
+    };
+    let path = file.into_path().map_err(internal)?;
+    allow_media(&app, &path)?;
+    Ok(Some(path.to_string_lossy().into_owned()))
+}
+
+/// Vuelve a permitir los fondos guardados (el permiso del protocolo asset no sobrevive a un reinicio).
+/// Devuelve los que siguen existiendo; solo imágenes, para no abrir otros archivos.
+#[tauri::command]
+fn allow_backgrounds(app: AppHandle, paths: Vec<String>) -> Vec<String> {
+    paths
+        .into_iter()
+        .filter(|p| {
+            let path = Path::new(p);
+            path.is_file()
+                && matches!(media_kind(path), Some(MediaKind::Image))
+                && allow_media(&app, path).is_ok()
+        })
+        .collect()
+}
+
+// --- Base de datos local: ajustes, letras y lista ---
+
+#[tauri::command]
+fn settings_get(state: State<'_, AppState>) -> Result<serde_json::Map<String, serde_json::Value>, CommandError> {
+    with_store(&state, |store| store.settings())
+}
+
+#[tauri::command]
+fn settings_set(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    key: String,
+    value: serde_json::Value,
+) -> Result<(), CommandError> {
+    with_store(&state, |store| store.set_setting(&key, &value))?;
+    emit_settings(&app, &state).map(|_| ())
+}
+
+/// Vuelve al valor inicial esas claves; lista vacía = todos los ajustes.
+#[tauri::command]
+fn settings_reset(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    keys: Vec<String>,
+) -> Result<serde_json::Map<String, serde_json::Value>, CommandError> {
+    with_store(&state, |store| store.reset_settings(&keys))?;
+    emit_settings(&app, &state)
+}
+
+/// Dónde está la base (para mostrarlo en Ajustes); None si se trabaja en memoria.
+#[tauri::command]
+fn store_path(state: State<'_, AppState>) -> Option<String> {
+    let guard = state.store.lock().unwrap();
+    guard.as_ref()?.path().map(|p| p.display().to_string())
+}
+
+#[tauri::command]
+fn songs_list(state: State<'_, AppState>) -> Result<Vec<store::Song>, CommandError> {
+    with_store(&state, |store| store.songs())
+}
+
+#[tauri::command]
+fn song_save(state: State<'_, AppState>, song: store::Song) -> Result<(), CommandError> {
+    with_store(&state, |store| store.save_song(&song))
+}
+
+#[tauri::command]
+fn song_delete(state: State<'_, AppState>, id: String) -> Result<(), CommandError> {
+    with_store(&state, |store| store.delete_song(&id))
+}
+
+#[tauri::command]
+fn setlist_get(state: State<'_, AppState>) -> Result<Vec<String>, CommandError> {
+    with_store(&state, |store| store.setlist())
+}
+
+#[tauri::command]
+fn setlist_set(state: State<'_, AppState>, ids: Vec<String>) -> Result<(), CommandError> {
+    with_store(&state, |store| store.set_setlist(&ids))
+}
+
+#[tauri::command]
+fn songs_reset(state: State<'_, AppState>) -> Result<(), CommandError> {
+    with_store(&state, |store| store.reset_songs())
 }
 
 #[tauri::command]
@@ -702,6 +896,9 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
         .setup(|app| {
+            // La base se abre antes que nada: la interfaz lee sus ajustes al cargar.
+            let dir = app.path().app_data_dir()?;
+            *app.state::<AppState>().store.lock().unwrap() = Some(store::Store::open(&dir));
             // Las Biblias se leen en segundo plano al arrancar, para que estén listas al abrir el panel.
             let handle = app.handle().clone();
             std::thread::spawn(move || {
@@ -732,6 +929,18 @@ pub fn run() {
             set_output_content,
             get_output_state,
             set_output_style,
+            settings_get,
+            settings_set,
+            settings_reset,
+            store_path,
+            songs_list,
+            song_save,
+            song_delete,
+            setlist_get,
+            setlist_set,
+            songs_reset,
+            pick_background,
+            allow_backgrounds,
             pick_media,
             pick_media_folder,
             report_output_error,

@@ -1,8 +1,14 @@
 <script lang="ts">
+  import { FONTS } from "$lib/fonts";
   import { t, type MessageKey } from "$lib/i18n/index.svelte";
-  import type { OutputStyle } from "$lib/platform";
+  import { toMessage, type Message } from "$lib/messages";
+  import { platform, type FontId, type OutputStyle } from "$lib/platform";
 
-  let { style, onchange }: { style: OutputStyle; onchange: (style: OutputStyle) => void } = $props();
+  let {
+    style,
+    onchange,
+    onerror,
+  }: { style: OutputStyle; onchange: (style: OutputStyle) => void; onerror: (message: Message) => void } = $props();
 
   const MIN_SCALE = 0.6;
   const MAX_SCALE = 1.6;
@@ -23,6 +29,15 @@
     { value: "navy", label: "bg.navy", color: "#0b1730" },
     { value: "charcoal", label: "bg.charcoal", color: "#1d1f22" },
   ];
+
+  async function pickImage() {
+    try {
+      const path = await platform.pickBackground(t("background.dialogTitle"), t("background.dialogFilter"));
+      if (path) onchange({ ...style, backgroundImage: path });
+    } catch (e) {
+      onerror(toMessage(e));
+    }
+  }
 
   function scale(delta: number) {
     const fontScale = Math.round(Math.min(MAX_SCALE, Math.max(MIN_SCALE, style.fontScale + delta)) * 10) / 10;
@@ -61,19 +76,35 @@
   </div>
 
   <div class="row">
+    <label class="label" for="style-font">{t("style.font")}</label>
+    <select id="style-font" class="field compact" value={style.font} onchange={(e) => onchange({ ...style, font: e.currentTarget.value as FontId })}>
+      {#each FONTS as f (f.id)}
+        <option value={f.id} style:font-family={f.family}>{f.id === "system" ? t("font.system") : f.label}</option>
+      {/each}
+    </select>
+  </div>
+
+  <div class="row">
     <span class="label">{t("style.background")}</span>
     <div class="swatches">
       {#each backgrounds as b (b.value)}
         <button
           class="swatch"
-          aria-pressed={style.background === b.value}
-          onclick={() => onchange({ ...style, background: b.value })}
+          aria-pressed={style.background === b.value && !style.backgroundImage}
+          onclick={() => onchange({ ...style, background: b.value, backgroundImage: null })}
         >
           <span class="dot" style:background={b.color}></span>{t(b.label)}
         </button>
       {/each}
+      <button class="swatch" aria-pressed={style.backgroundImage !== null} onclick={pickImage} title={style.backgroundImage ?? undefined}>
+        {#if style.backgroundImage}
+          <img class="dot" src={platform.mediaUrl(style.backgroundImage)} alt="" />
+        {/if}
+        {t(style.backgroundImage ? "background.change" : "background.pick")}
+      </button>
     </div>
   </div>
+  <p class="muted small">{t("background.hint")}</p>
 </div>
 
 <style>
@@ -98,5 +129,7 @@
     cursor: pointer;
   }
   .swatch[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .field.compact { width: auto; min-height: 36px; padding: 4px 8px; }
+  img.dot { object-fit: cover; }
   .dot { width: 16px; height: 16px; border-radius: 50%; border: 1px solid rgb(255 255 255 / 0.35); }
 </style>

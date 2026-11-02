@@ -2,59 +2,41 @@
   import { onMount } from "svelte";
   import OutputView, { DEFAULT_STYLE } from "$lib/OutputView.svelte";
   import BiblePanel from "$lib/components/BiblePanel.svelte";
+  import ClockPanel from "$lib/components/ClockPanel.svelte";
   import MediaPanel from "$lib/components/MediaPanel.svelte";
+  import SettingsView from "$lib/components/SettingsView.svelte";
   import SlideStrip from "$lib/components/SlideStrip.svelte";
   import StylePanel from "$lib/components/StylePanel.svelte";
   import StreamWorkspace from "$lib/components/StreamWorkspace.svelte";
   import TextPanel from "$lib/components/TextPanel.svelte";
+  import { formatCountdown, newTimer, pauseTimer, resumeTimer } from "$lib/clock";
   import { deckPosition, moveDeck } from "$lib/deck";
   import { i18n, locales, setLocale, t, type Locale, type MessageKey } from "$lib/i18n/index.svelte";
   import { toMessage, type Message } from "$lib/messages";
   import { pageCount } from "$lib/pdf";
   import { platform, type MonitorInfo, type OutputContent, type OutputState, type OutputStyle } from "$lib/platform";
   import { formatDuration, init as initObs, obs } from "$lib/obs.svelte";
+  import { setSetting, settings, storage } from "$lib/settings.svelte";
   import { setTheme, theme, type ThemeChoice } from "$lib/theme.svelte";
 
   const MONITOR_POLL_MS = 2000;
-  const TAB_KEY = "selah.tab";
-  const EXPANDED_KEY = "selah.expanded";
-  const VIEW_KEY = "selah.view";
+  const SETTINGS_ICON = "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z";
   const STREAM_ICON = "M12 13a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM8.5 15.5a5 5 0 0 1 0-7M15.5 8.5a5 5 0 0 1 0 7M5.6 18.4a9 9 0 0 1 0-12.8M18.4 5.6a9 9 0 0 1 0 12.8";
-  const STYLE_KEY = "selah.outputStyle";
 
-  type Tab = "bible" | "text" | "media";
+  type Tab = "bible" | "text" | "media" | "clock";
   // Iconos de trazo simple (24×24), heredan el color del texto.
   const tabs: { id: Tab; label: MessageKey; icon: string }[] = [
     { id: "bible", label: "nav.bible", icon: "M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5Zm0 16a2 2 0 0 1 2-2h13v2H6M12 7v6M9.5 9.5h5" },
     { id: "text", label: "nav.text", icon: "M4 6h16M4 10h16M4 14h10M4 18h7" },
     { id: "media", label: "nav.media", icon: "M4 5h16v14H4zM4 15l4.5-4.5 4 4 2.5-2.5L20 17M15.5 8.5h.01" },
+    { id: "clock", label: "nav.clock", icon: "M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM12 9v4l2.5 2.5M10 2h4" },
   ];
+  const TIMER_STEP_MS = 60_000;
   const themes: { id: ThemeChoice; label: MessageKey }[] = [
     { id: "system", label: "theme.system" },
     { id: "light", label: "theme.light" },
     { id: "dark", label: "theme.dark" },
   ];
-
-  function load<T>(key: string, fallback: T, valid: (v: unknown) => boolean): T {
-    try {
-      const raw = localStorage.getItem(key);
-      if (raw !== null) {
-        const value = JSON.parse(raw);
-        if (valid(value)) return value;
-      }
-    } catch {
-      // Sin almacenamiento o dato dañado: valor por defecto.
-    }
-    return fallback;
-  }
-
-  function save(key: string, value: unknown) {
-    try {
-      localStorage.setItem(key, JSON.stringify(value));
-    } catch {
-      // No se recordará, pero sigue funcionando.
-    }
-  }
 
   let monitors = $state<MonitorInfo[]>([]);
   let selectedIndex = $state<number | null>(null);
@@ -63,11 +45,11 @@
   let error = $state<Message | null>(null);
   let busy = $state(false);
   let pdfPages = $state<Record<string, number>>({});
-  /** Los dos hilos: Proyección (Biblia, Textos, Medios) y Transmisión (OBS). */
-  let view = $state<"projection" | "stream">(load(VIEW_KEY, "projection", (v) => v === "projection" || v === "stream"));
-  let tab = $state<Tab>(load(TAB_KEY, "bible", (v) => tabs.some((x) => x.id === v)));
+  /** Los dos hilos: Proyección (Biblia, Textos, Medios) y Transmisión (OBS); y los Ajustes, que no se recuerdan. */
+  let view = $state<"projection" | "stream" | "settings">(settings.view);
+  let tab = $derived<Tab>(tabs.some((x) => x.id === settings.tab) ? (settings.tab as Tab) : "bible");
   /** La sección de contenido ocupa toda la ventana; una barra inferior sigue mostrando preparado y en pantalla. */
-  let expanded = $state<boolean>(load(EXPANDED_KEY, false, (v) => typeof v === "boolean"));
+  let expanded = $derived(settings.expanded);
   /** Lo que había antes de poner la pantalla en negro, para volver con un clic. */
   let beforeBlack = $state<OutputContent | null>(null);
 
@@ -93,6 +75,8 @@
       case "image": return t("describe.image", { name: baseName(content.path) });
       case "video": return t(content.paused ? "describe.videoPaused" : "describe.video", { name: baseName(content.path) });
       case "pdf": return t("describe.pdf", { name: baseName(content.path), n: content.page });
+      case "clock": return t("describe.clock");
+      case "timer": return t(content.endsAt === null ? "describe.timerPaused" : "describe.timer", { time: formatCountdown(content.durationMs) });
     }
   }
 
@@ -124,19 +108,17 @@
   }
 
   function chooseTab(id: Tab) {
-    tab = id;
-    save(TAB_KEY, id);
+    setSetting("tab", id);
     chooseView("projection");
   }
 
-  function chooseView(v: "projection" | "stream") {
+  function chooseView(v: "projection" | "stream" | "settings") {
     view = v;
-    save(VIEW_KEY, v);
+    if (v !== "settings") setSetting("view", v);
   }
 
   function setExpanded(value: boolean) {
-    expanded = value;
-    save(EXPANDED_KEY, value);
+    setSetting("expanded", value);
   }
 
   async function refreshMonitors() {
@@ -171,6 +153,28 @@
     output = await platform.setOutputContent(content);
   });
 
+  /** «Enviar a pantalla»: si la salida está cerrada, se abre sola en el monitor elegido. */
+  const sendPrepared = (content: OutputContent) => run(async () => {
+    if (isTyping(document.activeElement)) (document.activeElement as HTMLElement).blur();
+    if (!output.open && selectedIndex !== null) output = await platform.openOutput(selectedIndex);
+    // Un temporizador preparado empieza a contar al llegar a la pantalla.
+    if (content.kind === "timer") content = newTimer(content.durationMs);
+    beforeBlack = null;
+    output = await platform.setOutputContent(content);
+  });
+
+  function changeTimer(change: "toggle" | "restart" | "add") {
+    const c = output.content;
+    if (c.kind !== "timer") return;
+    const now = Date.now();
+    switch (change) {
+      case "toggle": return send(c.endsAt === null ? resumeTimer(c, now) : pauseTimer(c, now));
+      case "restart": return send(c.endsAt === null ? { ...c, remainingMs: c.durationMs } : newTimer(c.durationMs));
+      case "add":
+        return send(c.endsAt === null ? { ...c, remainingMs: c.remainingMs + TIMER_STEP_MS } : { ...c, endsAt: c.endsAt + TIMER_STEP_MS });
+    }
+  }
+
   function toggleBlack() {
     if (output.content.kind === "black") {
       if (beforeBlack) send(beforeBlack);
@@ -193,7 +197,7 @@
   }
 
   function changeStyle(style: OutputStyle) {
-    save(STYLE_KEY, style);
+    setSetting("outputStyle", style);
     run(async () => {
       output = await platform.setOutputStyle(style);
     });
@@ -226,8 +230,7 @@
     platform.getOutputState().then((state) => {
       output = state;
       // El estilo elegido la última vez se aplica al arrancar.
-      const saved = load<OutputStyle | null>(STYLE_KEY, null, (v) => typeof v === "object" && v !== null && "fontScale" in v);
-      if (saved) changeStyle({ ...DEFAULT_STYLE, ...saved });
+      if (settings.outputStyle) changeStyle({ ...DEFAULT_STYLE, ...settings.outputStyle });
     });
     const unlisten = platform.onOutputState((state) => (output = state));
     const unlistenError = platform.onOutputError((message) => (error = { key: "error.fromOutput", params: { message } }));
@@ -301,8 +304,14 @@
     </div>
   </header>
 
-  {#if outputMonitorLost || error}
+  {#if outputMonitorLost || error || storage.error}
     <div class="alerts">
+      {#if storage.error}
+        <p class="alert" role="alert">
+          <span>{t("error.storage", { message: storage.error })}</span>
+          <button class="btn ghost" onclick={() => (storage.error = null)} aria-label={t("error.dismiss")}>✕</button>
+        </p>
+      {/if}
       {#if outputMonitorLost}
         <p class="alert" role="alert">{t("monitors.lost", { monitor: output.monitorName ?? "" })}</p>
       {/if}
@@ -328,12 +337,22 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d={STREAM_ICON} /></svg>
       <span>{t("nav.stream")}</span>
     </button>
+    <button class="nav-item settings-item" aria-current={view === "settings" ? "page" : undefined} onclick={() => chooseView("settings")}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d={SETTINGS_ICON} /></svg>
+      <span>{t("nav.settings")}</span>
+    </button>
   </nav>
 
   <!-- Las dos vistas siguen montadas: cambiar de una a otra no pierde búsquedas ni textos a medias. -->
   <main class="stream-area" hidden={view !== "stream"}>
     <StreamWorkspace projectionLive={output.content} onerror={(m) => (error = m)} />
   </main>
+
+  {#if view === "settings"}
+    <main class="settings-area">
+      <SettingsView style={output.style} onstylechange={changeStyle} onerror={(m) => (error = m)} />
+    </main>
+  {/if}
 
   <main class="workspace" class:expanded hidden={view !== "projection"}>
     <section class="card sources" aria-labelledby="sources-title">
@@ -354,16 +373,19 @@
           onprepare={prepare}
           onsend={(content) => {
             prepare(content);
-            send(content);
+            sendPrepared(content);
           }}
           onerror={(m) => (error = m)}
         />
       </div>
       <div class="card-body" hidden={tab !== "text"}>
-        <TextPanel onprepare={prepare} />
+        <TextPanel onprepare={prepare} onerror={(m) => (error = m)} />
       </div>
       <div class="card-body" hidden={tab !== "media"}>
         <MediaPanel {prepared} onprepare={prepare} onerror={(m) => (error = m)} />
+      </div>
+      <div class="card-body" hidden={tab !== "clock"}>
+        <ClockPanel onprepare={prepare} />
       </div>
     </section>
 
@@ -385,7 +407,7 @@
           </div>
         {/if}
         <SlideStrip content={prepared} style={output.style} tone="prepared" onselect={goPrepared} />
-        <button class="btn primary big send" onclick={() => send(prepared)} disabled={busy || prepared.kind === "empty"}>
+        <button class="btn primary big send" onclick={() => sendPrepared(prepared)} disabled={busy || prepared.kind === "empty"}>
           {t("prepared.send")} →
         </button>
       </div>
@@ -399,7 +421,7 @@
       <div class="card-body stack">
         <div class="screen live"><OutputView content={output.content} style={output.style} preview /></div>
         <p class="muted small">{t("live.tag")}: <strong>{describe(output.content)}</strong></p>
-        {#if !output.open}<p class="muted small">{t("live.closedHint")}</p>{/if}
+        {#if !output.open}<p class="muted small">{t(selected ? "live.autoOpenHint" : "live.closedHint")}</p>{/if}
 
         {#if livePosition}
           <div class="nav-row">
@@ -412,6 +434,13 @@
         {/if}
 
         <div class="quick">
+          {#if output.content.kind === "timer"}
+            <button class="btn" onclick={() => changeTimer("toggle")} disabled={busy}>
+              {t(output.content.endsAt === null ? "live.timerResume" : "live.timerPause")}
+            </button>
+            <button class="btn" onclick={() => changeTimer("restart")} disabled={busy}>{t("live.timerRestart")}</button>
+            <button class="btn" onclick={() => changeTimer("add")} disabled={busy}>{t("live.timerAdd")}</button>
+          {/if}
           {#if output.content.kind === "video"}
             <button class="btn" onclick={() => output.content.kind === "video" && send({ ...output.content, paused: !output.content.paused })} disabled={busy}>
               {t(output.content.paused ? "live.resume" : "live.pause")}
@@ -427,7 +456,7 @@
 
         <details class="style">
           <summary>{t("style.title")}</summary>
-          <StylePanel style={output.style} onchange={changeStyle} />
+          <StylePanel style={output.style} onchange={changeStyle} onerror={(m) => (error = m)} />
           <button class="btn ghost small" onclick={() => send({ kind: "testPattern" })} disabled={busy}>{t("style.testPattern")}</button>
         </details>
       </div>
@@ -446,7 +475,7 @@
             <span class="muted small">{t(preparedPosition.label, { n: preparedPosition.n, total: preparedPosition.total ?? "…" })}</span>
           {/if}
         </div>
-        <button class="btn primary big" onclick={() => send(prepared)} disabled={busy || prepared.kind === "empty"}>
+        <button class="btn primary big" onclick={() => sendPrepared(prepared)} disabled={busy || prepared.kind === "empty"}>
           {t("prepared.send")} →
         </button>
       </div>
@@ -517,6 +546,8 @@
 
   .body { flex: 1; min-height: 0; display: flex; }
   .workspace[hidden], .stream-area[hidden] { display: none; }
+  .settings-area { flex: 1; min-width: 0; min-height: 0; padding: 14px 16px 16px; overflow: auto; }
+  .settings-item { margin-top: auto; }
   .stream-area { flex: 1; min-width: 0; min-height: 0; padding: 14px 16px 16px; overflow: auto; }
   .sidebar hr { width: 100%; margin: 6px 0; border: 0; border-top: 1px solid var(--border); }
   .stream-pill { font: inherit; font-size: 14px; font-weight: 600; border: 0; cursor: pointer; }

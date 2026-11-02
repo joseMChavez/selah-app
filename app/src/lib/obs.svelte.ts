@@ -1,6 +1,8 @@
 // Estado de la conexión con OBS, compartido por la vista de Transmisión y la barra superior.
 // Es independiente de la proyección: nada de aquí cambia lo que se ve en el templo.
+import { t } from "$lib/i18n/index.svelte";
 import { platform, type ObsDetection, type ObsStatus } from "$lib/platform";
+import { settings } from "$lib/settings.svelte";
 
 const POLL_MS = 1000;
 const LAUNCH_WAIT_MS = 25_000;
@@ -49,13 +51,18 @@ export async function connect() {
   await poll();
 }
 
-/** Al abrir Selah: si OBS ya está abierto y preparado, se conecta sin pedir nada. */
+/** Texto de la escena «Espera»: el de Ajustes o, si no se cambió, el traducido. */
+export function waitMessage(): string {
+  return settings.obsWaitMessage.trim() || t("stream.waitMessage");
+}
+
+/** Al abrir Selah: si OBS ya está abierto y preparado, se conecta sin pedir nada (se puede desactivar en Ajustes). */
 export async function init() {
   const found = await detect().catch((e) => {
     platform.logError(`OBS: no se pudo detectar: ${JSON.stringify(e)}`).catch(() => {});
     return null;
   });
-  if (!found?.running || !found.websocketEnabled) return;
+  if (!settings.obsAutoConnect || !found?.running || !found.websocketEnabled) return;
   // Unos reintentos: al arrancar, OBS o el propio backend pueden tardar un momento en aceptar la conexión.
   for (let attempt = 1; attempt <= 4; attempt++) {
     try {
