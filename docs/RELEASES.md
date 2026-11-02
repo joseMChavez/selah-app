@@ -34,6 +34,18 @@ npm run tauri build
 ```
 Los archivos quedan en `app/src-tauri/target/release/bundle/`.
 
+## Icono
+
+La fuente es `app/src-tauri/icons/icon.svg` (también `app/static/favicon.svg`). Tras cambiarla, se regeneran todos los tamaños:
+```sh
+cd app
+rsvg-convert -w 1024 -h 1024 src-tauri/icons/icon.svg -o /tmp/selah-icon.png
+npx tauri icon /tmp/selah-icon.png -o src-tauri/icons
+rm -rf src-tauri/icons/android src-tauri/icons/ios src-tauri/icons/64x64.png   # Selah no los usa
+cp src-tauri/icons/icon.svg static/favicon.svg
+rsvg-convert -w 128 -h 128 static/favicon.svg -o static/favicon.png
+```
+
 ## Avisos al instalar
 
 Los instaladores no están firmados:

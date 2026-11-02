@@ -244,7 +244,7 @@
 
 <div class="app">
   <header class="topbar">
-    <div class="brand">Selah</div>
+    <div class="brand"><img src="/favicon.svg" alt="" />Selah</div>
 
     <p class="status" class:on={output.open} role="status">
       <span class="dot" aria-hidden="true"></span>
@@ -482,7 +482,8 @@
     background: var(--surface);
     border-bottom: 1px solid var(--border);
   }
-  .brand { font-size: 19px; font-weight: 750; letter-spacing: 0.01em; }
+  .brand { display: flex; align-items: center; gap: 8px; font-size: 19px; font-weight: 750; letter-spacing: 0.01em; }
+  .brand img { width: 30px; height: 30px; }
   .status {
     display: inline-flex;
     align-items: center;
