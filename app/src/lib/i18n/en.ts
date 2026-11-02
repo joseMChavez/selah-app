@@ -67,13 +67,13 @@ const en: Record<MessageKey, string> = {
 
   "media.addFiles": "+ Files…",
   "media.addFolder": "+ Folder…",
-  "media.folderTitle": "Choose a folder with images, videos or PDFs",
-  "media.folderEmpty": "That folder has no compatible images, videos or PDFs.",
+  "media.folderTitle": "Choose a folder with images, videos, PDFs or presentations",
+  "media.folderEmpty": "That folder has no compatible images, videos, PDFs or presentations.",
   "media.remove": "Remove “{name}” from the list",
   "media.clear": "Remove all",
   "media.count": "{count} files",
   "media.removeHint": "Removing from the list does not delete the file or change what is on screen.",
-  "media.empty": "Add images, videos or PDFs from your computer.",
+  "media.empty": "Add images, videos, PDFs or presentations (PowerPoint, Impress) from your computer.",
   "kind.image": "Image",
   "kind.video": "Video",
   "kind.pdf": "PDF",
@@ -130,8 +130,8 @@ const en: Record<MessageKey, string> = {
   "describe.videoPaused": "video “{name}” (paused)",
   "describe.pdf": "PDF “{name}”, page {n}",
 
-  "dialog.title": "Choose images, videos or PDFs",
-  "dialog.filter": "Images, videos and PDFs",
+  "dialog.title": "Choose images, videos, PDFs or presentations",
+  "dialog.filter": "Images, videos, PDFs and presentations",
 
   "pattern.title": "Test pattern",
   "pattern.scale": "scale",
@@ -313,6 +313,13 @@ const en: Record<MessageKey, string> = {
   "settings.bibleHide": "Hide",
   "settings.bibleRemove": "Remove",
   "settings.bibleRemoveAll": "Remove all",
+  "kind.presentation": "Presentation",
+  "media.converting": "Preparing the presentation…",
+  "media.convertingHint": "The first time takes a few seconds; after that it's instant.",
+  "media.noOffice": "Showing PowerPoint presentations requires LibreOffice (free, libreoffice.org). Install it and try again.",
+  "media.presentationNote": "Presentations are shown slide by slide, without animations or transitions.",
+  "error.officeNotInstalled": "Showing presentations requires LibreOffice (free, libreoffice.org).",
+  "error.conversionFailed": "Could not prepare “{file}”: {reason}",
 };
 
 export default en;

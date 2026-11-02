@@ -67,13 +67,13 @@ const it: Record<MessageKey, string> = {
 
   "media.addFiles": "+ File…",
   "media.addFolder": "+ Cartella…",
-  "media.folderTitle": "Scegli una cartella con immagini, video o PDF",
-  "media.folderEmpty": "Quella cartella non contiene immagini, video o PDF compatibili.",
+  "media.folderTitle": "Scegli una cartella con immagini, video, PDF o presentazioni",
+  "media.folderEmpty": "Quella cartella non contiene immagini, video, PDF o presentazioni compatibili.",
   "media.remove": "Rimuovi «{name}» dall'elenco",
   "media.clear": "Rimuovi tutti",
   "media.count": "{count} file",
   "media.removeHint": "Rimuovere dall'elenco non cancella il file né cambia ciò che è sullo schermo.",
-  "media.empty": "Aggiungi immagini, video o PDF dal tuo computer.",
+  "media.empty": "Aggiungi immagini, video, PDF o presentazioni (PowerPoint, Impress) dal tuo computer.",
   "kind.image": "Immagine",
   "kind.video": "Video",
   "kind.pdf": "PDF",
@@ -130,8 +130,8 @@ const it: Record<MessageKey, string> = {
   "describe.videoPaused": "video «{name}» (in pausa)",
   "describe.pdf": "PDF «{name}», pagina {n}",
 
-  "dialog.title": "Scegli immagini, video o PDF",
-  "dialog.filter": "Immagini, video e PDF",
+  "dialog.title": "Scegli immagini, video, PDF o presentazioni",
+  "dialog.filter": "Immagini, video, PDF e presentazioni",
 
   "pattern.title": "Schermata di prova",
   "pattern.scale": "scala",
@@ -313,6 +313,13 @@ const it: Record<MessageKey, string> = {
   "settings.bibleHide": "Nascondi",
   "settings.bibleRemove": "Togli",
   "settings.bibleRemoveAll": "Togli tutte",
+  "kind.presentation": "Presentazione",
+  "media.converting": "Preparazione della presentazione…",
+  "media.convertingHint": "La prima volta richiede qualche secondo; poi è immediato.",
+  "media.noOffice": "Per mostrare le presentazioni di PowerPoint serve LibreOffice (gratuito, libreoffice.org). Installalo e riprova.",
+  "media.presentationNote": "Le presentazioni si mostrano diapositiva per diapositiva, senza animazioni né transizioni.",
+  "error.officeNotInstalled": "Per mostrare le presentazioni serve LibreOffice (gratuito, libreoffice.org).",
+  "error.conversionFailed": "Impossibile preparare «{file}»: {reason}",
 };
 
 export default it;

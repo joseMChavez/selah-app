@@ -3,6 +3,7 @@
 // Ajustes, letras y lista del culto viven en una base SQLite local (store.rs).
 mod bible;
 mod obs;
+mod office;
 mod picker;
 mod store;
 
@@ -212,6 +213,9 @@ enum CommandError {
     ObsRunning,
     ObsNotConnected,
     Obs { message: String },
+    /// Para mostrar presentaciones hace falta LibreOffice.
+    OfficeNotInstalled,
+    ConversionFailed { file: String, reason: String },
     /// No se pudo leer o escribir la base de datos local.
     Storage { message: String },
     Internal { message: String },
@@ -229,6 +233,8 @@ enum MediaKind {
     Image,
     Video,
     Pdf,
+    /// PowerPoint o Impress: se convierte a PDF al prepararla (office.rs).
+    Presentation,
 }
 
 #[derive(Serialize)]
@@ -248,6 +254,8 @@ fn media_kind(path: &Path) -> Option<MediaKind> {
         Some(MediaKind::Video)
     } else if PDF_EXTENSIONS.contains(&ext) {
         Some(MediaKind::Pdf)
+    } else if office::PRESENTATION_EXTENSIONS.contains(&ext) {
+        Some(MediaKind::Presentation)
     } else {
         None
     }
@@ -488,7 +496,10 @@ async fn pick_media(
 ) -> Result<Vec<MediaFile>, CommandError> {
     let request = picker::Request {
         title,
-        filter: Some((filter_name, dialog_extensions(&[IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, PDF_EXTENSIONS]))),
+        filter: Some((
+            filter_name,
+            dialog_extensions(&[IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, PDF_EXTENSIONS, office::PRESENTATION_EXTENSIONS]),
+        )),
         mode: picker::Mode::Files,
     };
     let Some(picked) = picker::pick(&app, request).await.map_err(internal)? else {
@@ -804,6 +815,35 @@ fn set_output_style(app: AppHandle, state: State<'_, AppState>, mut style: Outpu
     publish(&app, &state, |output| output.style = style)
 }
 
+/// Convierte una presentación a PDF (o la toma de la caché) y devuelve la ruta del PDF, lista para mostrarse.
+#[tauri::command]
+async fn convert_presentation(app: AppHandle, path: String) -> Result<String, CommandError> {
+    let source = PathBuf::from(&path);
+    if !source.is_file() {
+        return Err(CommandError::FileMissing { path });
+    }
+    let cache = app.path().app_cache_dir().map_err(internal)?.join("presentaciones");
+    let file = source.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    // LibreOffice tarda unos segundos: fuera del hilo de los comandos.
+    let pdf = tauri::async_runtime::spawn_blocking(move || office::convert(&source, &cache))
+        .await
+        .map_err(internal)?
+        .map_err(|e| match e {
+            office::OfficeError::NotInstalled => CommandError::OfficeNotInstalled,
+            office::OfficeError::Failed(reason) => {
+                eprintln!("[presentación] {file}: {reason}");
+                CommandError::ConversionFailed { file, reason }
+            }
+        })?;
+    allow_media(&app, &pdf)?;
+    Ok(pdf.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+fn office_available() -> bool {
+    office::find_soffice().is_some()
+}
+
 /// Elige una imagen o GIF de fondo. None si se cancela.
 #[tauri::command]
 async fn pick_background(
@@ -979,6 +1019,8 @@ pub fn run() {
             setlist_set,
             songs_reset,
             pick_background,
+            convert_presentation,
+            office_available,
             allow_backgrounds,
             pick_media,
             pick_media_folder,

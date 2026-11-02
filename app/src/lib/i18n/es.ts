@@ -66,13 +66,13 @@ const es = {
 
   "media.addFiles": "+ Archivos…",
   "media.addFolder": "+ Carpeta…",
-  "media.folderTitle": "Elegir una carpeta con imágenes, videos o PDF",
-  "media.folderEmpty": "Esa carpeta no tiene imágenes, videos ni PDF compatibles.",
+  "media.folderTitle": "Elegir una carpeta con imágenes, videos, PDF o presentaciones",
+  "media.folderEmpty": "Esa carpeta no tiene imágenes, videos, PDF ni presentaciones compatibles.",
   "media.remove": "Quitar «{name}» de la lista",
   "media.clear": "Quitar todos",
   "media.count": "{count} archivos",
   "media.removeHint": "Quitar de la lista no borra el archivo ni cambia lo que está en pantalla.",
-  "media.empty": "Añade imágenes, videos o PDF desde tu equipo.",
+  "media.empty": "Añade imágenes, videos, PDF o presentaciones (PowerPoint, Impress) desde tu equipo.",
   "kind.image": "Imagen",
   "kind.video": "Video",
   "kind.pdf": "PDF",
@@ -129,8 +129,8 @@ const es = {
   "describe.videoPaused": "video «{name}» (en pausa)",
   "describe.pdf": "PDF «{name}», página {n}",
 
-  "dialog.title": "Elegir imágenes, videos o PDF",
-  "dialog.filter": "Imágenes, videos y PDF",
+  "dialog.title": "Elegir imágenes, videos, PDF o presentaciones",
+  "dialog.filter": "Imágenes, videos, PDF y presentaciones",
 
   "pattern.title": "Patrón de prueba",
   "pattern.scale": "escala",
@@ -312,6 +312,13 @@ const es = {
   "settings.bibleHide": "Ocultar",
   "settings.bibleRemove": "Quitar",
   "settings.bibleRemoveAll": "Quitar todas",
+  "kind.presentation": "Presentación",
+  "media.converting": "Preparando la presentación…",
+  "media.convertingHint": "La primera vez tarda unos segundos; después es inmediato.",
+  "media.noOffice": "Para mostrar presentaciones de PowerPoint hace falta LibreOffice (gratuito, libreoffice.org). Instálalo y vuelve a intentarlo.",
+  "media.presentationNote": "Las presentaciones se muestran diapositiva a diapositiva, sin animaciones ni transiciones.",
+  "error.officeNotInstalled": "Para mostrar presentaciones hace falta LibreOffice (gratuito, libreoffice.org).",
+  "error.conversionFailed": "No se pudo preparar «{file}»: {reason}",
 };
 
 export type MessageKey = keyof typeof es;

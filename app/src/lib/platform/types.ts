@@ -85,7 +85,8 @@ export interface SearchHit {
   text: string;
 }
 
-export type MediaKind = "image" | "video" | "pdf";
+/** «presentation» (PowerPoint, Impress) se convierte a PDF al prepararla. */
+export type MediaKind = "image" | "video" | "pdf" | "presentation";
 
 export interface MediaFile {
   path: string;
@@ -158,6 +159,8 @@ export type CommandError =
   | { code: "obsNotConnected" }
   | { code: "obs"; message: string }
   | { code: "storage"; message: string }
+  | { code: "officeNotInstalled" }
+  | { code: "conversionFailed"; file: string; reason: string }
   | { code: "internal"; message: string };
 
 export interface OutputState {
@@ -184,6 +187,10 @@ export interface Platform {
   pickBackground(title: string, filterName: string): Promise<string | null>;
   /** Vuelve a permitir fondos guardados tras reiniciar; devuelve los que siguen existiendo. */
   allowBackgrounds(paths: string[]): Promise<string[]>;
+  /** Convierte una presentación a PDF con LibreOffice (o la toma de la caché) y devuelve la ruta del PDF. */
+  convertPresentation(path: string): Promise<string>;
+  /** LibreOffice está instalado (hace falta para las presentaciones). */
+  officeAvailable(): Promise<boolean>;
   /** URL que el webview puede cargar para un archivo local ya permitido. */
   mediaUrl(path: string): string;
   reportOutputError(message: string): Promise<void>;
