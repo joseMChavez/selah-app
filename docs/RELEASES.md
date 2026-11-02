@@ -62,3 +62,5 @@ Los instaladores no están firmados:
 | `v0.2.2` | ⚠️ Parcial | Windows y macOS compilaron; Linux falló al instalar dependencias: `libgstreamer1.0-dev` choca con libunwind en ubuntu-22.04. Aprendizaje: instalar solo los paquetes necesarios (PR #6). Queda un borrador sin instalador de Linux. |
 | `v0.2.3` | Pendiente | Primera versión con instaladores para los tres sistemas. |
 | `v0.3.0` | Pendiente | Letras (biblioteca, lista del culto, fondos de imagen o GIF, tipos de letra), Biblia en dos versiones, reloj y temporizador, presentaciones de PowerPoint (con LibreOffice), logo como marca de agua, «Enviar a pantalla» abre la salida sola, y ajustes y letras guardados en SQLite con opción de restablecer (D-014). |
+| `v0.3.1` | ❌ Descartada | La etiqueta se creó sobre `06dcd44` (el código de la 0.3.0) antes de fusionar #9 y #10: los instaladores dicen 0.3.1 pero no traen PowerPoint ni Keynote. Aprendizaje: subir la versión en `main` y etiquetar ese commit. Su borrador no se publica. |
+| `v0.3.2` | Pendiente | Presentaciones también con PowerPoint (Windows), Keynote o PowerPoint (macOS), no solo con LibreOffice. Actions con Node 24. |
