@@ -40,7 +40,8 @@ struct MonitorInfo {
 }
 
 #[derive(Clone, Default, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
+// rename_all solo cambia el nombre de las variantes; rename_all_fields, el de sus campos (duration_ms → durationMs).
+#[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
 enum OutputContent {
     #[default]
     Empty,
@@ -887,6 +888,25 @@ fn songs_reset(state: State<'_, AppState>) -> Result<(), CommandError> {
 #[tauri::command]
 fn get_output_state(state: State<'_, AppState>) -> OutputState {
     state.output.lock().unwrap().clone()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Los contenidos llegan de la interfaz en camelCase: un campo mal nombrado solo falla al enviarlo.
+    #[test]
+    fn contenidos_de_la_interfaz() {
+        for json in [
+            r#"{"kind":"timer","durationMs":60000,"endsAt":null,"remainingMs":60000}"#,
+            r#"{"kind":"clock","hour12":true,"seconds":false}"#,
+            r#"{"kind":"text","slides":["a"],"index":0,"credit":"c","background":null}"#,
+            r#"{"kind":"scripture","verses":[{"reference":"Jn 3:16","text":"t","second":{"reference":"Jn 3:16","text":"t"}}],"index":0,"version":"V","copyright":"","second":{"version":"W","copyright":""}}"#,
+        ] {
+            let content: OutputContent = serde_json::from_str(json).expect(json);
+            assert_eq!(serde_json::to_value(&content).unwrap(), serde_json::from_str::<serde_json::Value>(json).unwrap());
+        }
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
