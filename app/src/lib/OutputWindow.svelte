@@ -12,6 +12,16 @@
   // Derivado para que cambie también al cambiar de idioma.
   let size = $derived(`${width}×${height} px · ${t("pattern.scale")} ${dpr}`);
 
+  // Si el teclado quedó en esta ventana (pasa al abrirla a pantalla completa), las flechas siguen funcionando.
+  // Las mismas teclas que en la consola; RePág y AvPág son las que envían los presentadores inalámbricos.
+  function onKeydown(event: KeyboardEvent) {
+    const forward = event.key === "ArrowRight" || event.key === "PageDown";
+    const back = event.key === "ArrowLeft" || event.key === "PageUp";
+    if (!forward && !back) return;
+    event.preventDefault();
+    platform.outputNavigate(forward).catch(() => {});
+  }
+
   function measure() {
     dpr = window.devicePixelRatio;
     width = Math.round(innerWidth * dpr);
@@ -31,7 +41,7 @@
   });
 </script>
 
-<svelte:window onresize={measure} />
+<svelte:window onresize={measure} onkeydown={onKeydown} />
 
 <div class="output">
   <OutputView {content} {style} diagnostics={size} onerror={(message) => platform.reportOutputError(message)} />

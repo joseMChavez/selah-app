@@ -36,7 +36,12 @@
       if (path) onchange({ ...style, backgroundImage: path });
     } catch (e) {
       onerror(toMessage(e));
+      platform.logError(`fondo: no se pudo elegir: ${JSON.stringify(e)}`).catch(() => {});
     }
+  }
+
+  function baseName(path: string): string {
+    return path.split(/[\\/]/).pop() ?? path;
   }
 
   function scale(delta: number) {
@@ -104,6 +109,12 @@
       </button>
     </div>
   </div>
+  {#if style.backgroundImage}
+    <div class="row current">
+      <span class="muted small name" title={style.backgroundImage}>{t("background.current", { name: baseName(style.backgroundImage) })}</span>
+      <button class="btn ghost" onclick={() => onchange({ ...style, backgroundImage: null })}>{t("background.remove")}</button>
+    </div>
+  {/if}
   <p class="muted small">{t("background.hint")}</p>
 </div>
 
@@ -131,5 +142,7 @@
   .swatch[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
   .field.compact { width: auto; min-height: 36px; padding: 4px 8px; }
   img.dot { object-fit: cover; }
+  .current { justify-content: flex-end; }
+  .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dot { width: 16px; height: 16px; border-radius: 50%; border: 1px solid rgb(255 255 255 / 0.35); }
 </style>

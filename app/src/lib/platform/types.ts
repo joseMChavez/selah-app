@@ -190,6 +190,9 @@ export interface Platform {
   /** Escribe un error de la interfaz en el registro de la app. */
   logError(message: string): Promise<void>;
   onOutputError(handler: (message: string) => void): Promise<() => void>;
+  /** Avanzar (true) o retroceder lo que está en pantalla; lo pide la ventana de salida al pulsar una flecha. */
+  outputNavigate(forward: boolean): Promise<void>;
+  onOutputNavigate(handler: (forward: boolean) => void): Promise<() => void>;
   listBibles(): Promise<BibleInfo[]>;
   /** Abre el selector de archivos XML; devuelve las Biblias importadas ([] si se cancela). */
   importBibles(title: string, filterName: string): Promise<BibleInfo[]>;

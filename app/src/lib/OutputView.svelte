@@ -84,9 +84,10 @@
     return null;
   });
 
-  // La imagen de fondo va detrás del texto, la Biblia y el reloj; una letra puede traer la suya.
+  // La imagen de fondo va detrás del texto, la Biblia y el reloj, y queda sola al quitar el contenido.
+  // Una letra puede traer la suya.
   let backdrop = $derived.by(() => {
-    if (!lyric && !clock) return null;
+    if (!lyric && !clock && content.kind !== "empty") return null;
     const path = (content.kind === "text" && content.background) || style.backgroundImage;
     return path ? platform.mediaUrl(path) : null;
   });

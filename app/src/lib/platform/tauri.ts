@@ -19,6 +19,8 @@ export const tauriPlatform: Platform = {
   reportOutputError: (message) => invoke("report_output_error", { message }),
   logError: (message) => invoke("log_client_error", { message }),
   onOutputError: (handler) => listen<string>("output-error", (event) => handler(event.payload)),
+  outputNavigate: (forward) => invoke("output_navigate", { forward }),
+  onOutputNavigate: (handler) => listen<boolean>("output-navigate", (event) => handler(event.payload)),
   listBibles: () => invoke("list_bibles"),
   importBibles: (title, filterName) => invoke("import_bibles", { title, filterName }),
   removeBible: (id) => invoke("remove_bible", { id }),

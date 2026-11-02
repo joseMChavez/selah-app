@@ -2,6 +2,7 @@
   // Ajustes guardados en la base local. Cada sección se puede cambiar aquí y volver a su estado inicial;
   // lo que borra datos del usuario (las letras, todo) pide confirmación con un segundo clic.
   import { onMount } from "svelte";
+  import { bibles, importBibles, loadBibles, removeAllBibles, removeBible, showBible } from "$lib/bibles.svelte";
   import StylePanel from "$lib/components/StylePanel.svelte";
   import { DEFAULT_STYLE } from "$lib/OutputView.svelte";
   import { locales, setLocale, t, type Locale, type MessageKey } from "$lib/i18n/index.svelte";
@@ -29,9 +30,9 @@
     { id: "dark", label: "theme.dark" },
   ];
 
-  type Section = keyof typeof SECTIONS | "songs" | "all";
+  /** Sección, o «bible:<id>» para quitar una versión concreta. */
+  type Section = keyof typeof SECTIONS | "songs" | "all" | "bibles" | `bible:${string}`;
 
-  let bibles = $state<BibleInfo[]>([]);
   let path = $state<string | null | undefined>(undefined);
   let waitDraft = $state(settings.obsWaitMessage);
   let confirming = $state<Section | null>(null);
@@ -72,6 +73,17 @@
       if (section === "projection") await platform.setOutputStyle(DEFAULT_STYLE);
     }, section);
 
+  function removeVersion(b: BibleInfo) {
+    // Ocultar una incluida se deshace con un clic; borrar una importada, no: pide confirmar.
+    if (b.builtin || confirmed(`bible:${b.id}`)) run(() => removeBible(b), "bible");
+  }
+
+  function removeAll() {
+    if (confirmed("bibles")) run(removeAllBibles, "bible");
+  }
+
+  const importMore = () => run(() => importBibles(t("bible.dialogTitle"), t("bible.dialogFilter")), "bible");
+
   function resetSongs() {
     if (confirmed("songs")) run(resetLibrary, "songs");
   }
@@ -93,7 +105,7 @@
     }, "stream");
 
   onMount(() => {
-    platform.listBibles().then((list) => (bibles = list)).catch(() => {});
+    if (bibles.all.length === 0) loadBibles().catch((e) => onerror(toMessage(e)));
     platform.storePath().then((p) => (path = p)).catch(() => (path = null));
   });
 </script>
@@ -140,22 +152,39 @@
   </section>
 
   <section class="card">
-    <h2>{t("nav.bible")}</h2>
-    <div class="row">
-      <label for="set-bible">{t("bible.version")}</label>
-      <select id="set-bible" class="field compact" value={settings.bible ?? ""} onchange={(e) => setSetting("bible", e.currentTarget.value || null)}>
-        <option value="">{t("settings.bibleFirst")}</option>
-        {#each bibles as b (b.id)}<option value={b.id}>{b.abbreviation} — {b.name}</option>{/each}
-      </select>
+    <h2>{t("settings.bibles")}</h2>
+    <p class="muted small">{t("settings.biblesIntro")}</p>
+    {#if bibles.all.length === 0}
+      <p class="muted">{t("bible.empty")}</p>
+    {:else}
+      <ul class="versions">
+        {#each bibles.all as b (b.id)}
+          {@const hidden = settings.hiddenBibles.includes(b.id)}
+          <li class:hidden title={`${b.name}\n${b.copyright || t("bible.noCopyright")}`}>
+            <span class="abbr">{b.abbreviation}</span>
+            <span class="vname">
+              {b.name}
+              <span class="muted small">{t(b.builtin ? "settings.bibleBuiltin" : "settings.bibleImported")}{hidden ? ` · ${t("settings.bibleHidden")}` : ""}</span>
+            </span>
+            {#if hidden}
+              <button class="btn ghost" onclick={() => showBible(b.id)}>{t("settings.bibleShow")}</button>
+            {:else}
+              <button class="btn ghost" class:danger={confirming === `bible:${b.id}`} onclick={() => removeVersion(b)}>
+                {confirming === `bible:${b.id}` ? t("settings.confirm") : t(b.builtin ? "settings.bibleHide" : "settings.bibleRemove")}
+              </button>
+            {/if}
+          </li>
+        {/each}
+      </ul>
+    {/if}
+    <div class="foot">
+      {#if done === "bible"}<span class="ok small">{t("settings.restored")}</span>{/if}
+      <button class="btn" onclick={importMore}>{t("bible.import")}</button>
+      <button class="btn" class:danger={confirming === "bibles"} onclick={removeAll} disabled={bibles.all.length === 0}>
+        {confirming === "bibles" ? t("settings.confirm") : t("settings.bibleRemoveAll")}
+      </button>
+      <button class="btn ghost" onclick={() => resetSection("bible")}>{t("settings.resetBible")}</button>
     </div>
-    <div class="row">
-      <label for="set-bible2">{t("bible.secondVersion")}</label>
-      <select id="set-bible2" class="field compact" value={settings.bible2 ?? ""} onchange={(e) => setSetting("bible2", e.currentTarget.value || null)}>
-        <option value="">{t("bible.secondNone")}</option>
-        {#each bibles as b (b.id)}<option value={b.id}>{b.abbreviation} — {b.name}</option>{/each}
-      </select>
-    </div>
-    {@render resetButton("bible", "settings.resetBible")}
   </section>
 
   <section class="card">
@@ -225,4 +254,11 @@
   .warn { padding: 8px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--warn-text); }
   code { font-size: 12.5px; overflow-wrap: anywhere; }
   .danger-zone { border-color: var(--live-soft); }
+  .versions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .versions li { display: flex; align-items: center; gap: 12px; padding: 6px 8px; border-radius: 8px; }
+  .versions li:hover { background: var(--surface-2); }
+  .versions li.hidden { opacity: 0.6; }
+  .abbr { min-width: 5.5em; font-weight: 750; letter-spacing: 0.02em; }
+  .vname { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .foot { flex-wrap: wrap; }
 </style>

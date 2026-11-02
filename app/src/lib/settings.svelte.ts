@@ -25,6 +25,8 @@ const SCHEMA = {
   bible: { initial: null as string | null, valid: isStringOrNull },
   /** Segunda versión debajo de la primera; null = solo una. */
   bible2: { initial: null as string | null, valid: isStringOrNull },
+  /** Biblias que no aparecen para elegir (las incluidas no se pueden borrar: se ocultan). */
+  hiddenBibles: { initial: [] as string[], valid: (v: unknown) => Array.isArray(v) && v.every(isString) },
   obsTextSource: { initial: null as string | null, valid: isStringOrNull },
   /** "" = el mensaje traducido de siempre. */
   obsWaitMessage: { initial: "", valid: isString },
@@ -42,7 +44,7 @@ const KEYS = Object.keys(SCHEMA) as SettingKey[];
 export const SECTIONS = {
   interface: ["locale", "theme", "tab", "view", "expanded"],
   projection: ["outputStyle"],
-  bible: ["bible", "bible2"],
+  bible: ["bible", "bible2", "hiddenBibles"],
   stream: ["obsTextSource", "obsWaitMessage", "obsAutoConnect"],
 } satisfies Record<string, SettingKey[]>;
 

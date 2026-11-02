@@ -203,6 +203,11 @@
     });
   }
 
+  /** Un paso adelante o atrás en lo que está en pantalla (teclado de la consola o de la salida). */
+  function stepLive(forward: boolean) {
+    if (livePosition) goLive(livePosition.n + (forward ? 1 : -1));
+  }
+
   function onKeydown(event: KeyboardEvent) {
     if (event.key === "Escape" && expanded) {
       setExpanded(false);
@@ -213,10 +218,10 @@
     if (view !== "projection" || isTyping(event.target as Element) || !livePosition) return;
     if (event.key === "ArrowRight" || event.key === "PageDown") {
       event.preventDefault();
-      goLive(livePosition.n + 1);
+      stepLive(true);
     } else if (event.key === "ArrowLeft" || event.key === "PageUp") {
       event.preventDefault();
-      goLive(livePosition.n - 1);
+      stepLive(false);
     }
   }
 
@@ -234,11 +239,13 @@
     });
     const unlisten = platform.onOutputState((state) => (output = state));
     const unlistenError = platform.onOutputError((message) => (error = { key: "error.fromOutput", params: { message } }));
+    const unlistenNavigate = platform.onOutputNavigate(stepLive);
     const timer = setInterval(refreshMonitors, MONITOR_POLL_MS);
     return () => {
       clearInterval(timer);
       unlisten.then((fn) => fn());
       unlistenError.then((fn) => fn());
+      unlistenNavigate.then((fn) => fn());
     };
   });
 </script>

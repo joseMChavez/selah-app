@@ -96,6 +96,7 @@
       }
     } catch (e) {
       onerror(toMessage(e));
+      platform.logError(`fondo de letra: no se pudo elegir: ${JSON.stringify(e)}`).catch(() => {});
     }
   }
 

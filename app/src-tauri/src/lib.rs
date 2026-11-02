@@ -3,6 +3,7 @@
 // Ajustes, letras y lista del culto viven en una base SQLite local (store.rs).
 mod bible;
 mod obs;
+mod picker;
 mod store;
 
 use std::path::{Path, PathBuf};
@@ -13,12 +14,13 @@ use tauri::{
     AppHandle, Emitter, Manager, Monitor, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
     WindowEvent,
 };
-use tauri_plugin_dialog::DialogExt;
 
-const MAIN_LABEL: &str = "main";
+pub(crate) const MAIN_LABEL: &str = "main";
 const OUTPUT_LABEL: &str = "output";
 const OUTPUT_STATE_EVENT: &str = "output-state";
 const OUTPUT_ERROR_EVENT: &str = "output-error";
+/// Teclas de avance pulsadas en la ventana de salida: las aplica la consola, que sabe qué hay en pantalla.
+const OUTPUT_NAVIGATE_EVENT: &str = "output-navigate";
 /// Lleva todos los ajustes tras cada cambio: así la ventana de salida sigue el idioma de la consola.
 const SETTINGS_EVENT: &str = "settings-changed";
 
@@ -251,6 +253,16 @@ fn media_kind(path: &Path) -> Option<MediaKind> {
     }
 }
 
+/// Extensiones para el filtro del selector de archivos, en minúsculas y en mayúsculas:
+/// en Linux el filtro distingue mayúsculas y una foto «IMG_0001.JPG» no aparecería.
+fn dialog_extensions(groups: &[&[&str]]) -> Vec<String> {
+    groups
+        .iter()
+        .flat_map(|g| g.iter())
+        .flat_map(|ext| [ext.to_string(), ext.to_uppercase()])
+        .collect()
+}
+
 // El protocolo asset empieza sin acceso a nada; solo se abren los archivos que el usuario elige.
 fn allow_media(app: &AppHandle, path: &Path) -> Result<(), CommandError> {
     app.asset_protocol_scope()
@@ -414,6 +426,14 @@ async fn open_output(
             .map_err(internal)?,
     };
     place_fullscreen(&window, monitor, monitor_index)?;
+    // El teclado vuelve a la consola (si el sistema lo permite): las flechas avanzan desde allí.
+    // Se encola detrás de la colocación de la salida, que también corre en el hilo principal.
+    if let Some(console) = app.get_webview_window(MAIN_LABEL) {
+        let target = console.clone();
+        let _ = console.run_on_main_thread(move || {
+            let _ = target.set_focus();
+        });
+    }
 
     let name = monitor_name(monitor, monitor_index);
     Ok(publish(&app, &state, |output| {
@@ -466,20 +486,17 @@ async fn pick_media(
     title: String,
     filter_name: String,
 ) -> Result<Vec<MediaFile>, CommandError> {
-    let all: Vec<&str> = [IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, PDF_EXTENSIONS].concat();
-    let Some(picked) = app
-        .dialog()
-        .file()
-        .set_title(title)
-        .add_filter(filter_name, &all)
-        .blocking_pick_files()
-    else {
+    let request = picker::Request {
+        title,
+        filter: Some((filter_name, dialog_extensions(&[IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, PDF_EXTENSIONS]))),
+        mode: picker::Mode::Files,
+    };
+    let Some(picked) = picker::pick(&app, request).await.map_err(internal)? else {
         return Ok(Vec::new());
     };
 
     let mut files = Vec::new();
-    for file in picked {
-        let path: PathBuf = file.into_path().map_err(internal)?;
+    for path in picked {
         if let Some(media) = to_media_file(&app, path)? {
             files.push(media);
         }
@@ -507,10 +524,10 @@ const MAX_FOLDER_FILES: usize = 2000;
 /// None si se cancela el diálogo; lista vacía si la carpeta no tiene nada compatible.
 #[tauri::command]
 async fn pick_media_folder(app: AppHandle, title: String) -> Result<Option<Vec<MediaFile>>, CommandError> {
-    let Some(folder) = app.dialog().file().set_title(title).blocking_pick_folder() else {
+    let request = picker::Request { title, filter: None, mode: picker::Mode::Folder };
+    let Some(root) = picker::pick(&app, request).await.map_err(internal)?.and_then(|p| p.into_iter().next()) else {
         return Ok(None);
     };
-    let root = folder.into_path().map_err(internal)?;
 
     let mut found = Vec::new();
     let mut pending = vec![root];
@@ -687,19 +704,17 @@ async fn import_bibles(
     title: String,
     filter_name: String,
 ) -> Result<Vec<bible::BibleInfo>, CommandError> {
-    let Some(picked) = app
-        .dialog()
-        .file()
-        .set_title(title)
-        .add_filter(filter_name, &["xml"])
-        .blocking_pick_files()
-    else {
+    let request = picker::Request {
+        title,
+        filter: Some((filter_name, dialog_extensions(&[&["xml"]]))),
+        mode: picker::Mode::Files,
+    };
+    let Some(picked) = picker::pick(&app, request).await.map_err(internal)? else {
         return Ok(Vec::new());
     };
     let dir = bibles_dir(&app)?;
     let mut imported = Vec::new();
-    for file in picked {
-        let path = file.into_path().map_err(internal)?;
+    for path in picked {
         let info = state
             .bibles
             .lock()
@@ -771,6 +786,12 @@ fn report_output_error(app: AppHandle, message: String) {
     let _ = app.emit(OUTPUT_ERROR_EVENT, message);
 }
 
+/// Si el foco quedó en la salida, sus flechas (o un presentador inalámbrico) mueven igual lo que está en pantalla.
+#[tauri::command]
+fn output_navigate(app: AppHandle, forward: bool) {
+    let _ = app.emit(OUTPUT_NAVIGATE_EVENT, forward);
+}
+
 #[tauri::command]
 fn set_output_style(app: AppHandle, state: State<'_, AppState>, mut style: OutputStyle) -> OutputState {
     // Un fondo que ya no existe (archivo movido, otro equipo) se quita en vez de dejar la pantalla rota.
@@ -790,16 +811,14 @@ async fn pick_background(
     title: String,
     filter_name: String,
 ) -> Result<Option<String>, CommandError> {
-    let Some(file) = app
-        .dialog()
-        .file()
-        .set_title(title)
-        .add_filter(filter_name, IMAGE_EXTENSIONS)
-        .blocking_pick_file()
-    else {
+    let request = picker::Request {
+        title,
+        filter: Some((filter_name, dialog_extensions(&[IMAGE_EXTENSIONS]))),
+        mode: picker::Mode::File,
+    };
+    let Some(path) = picker::pick(&app, request).await.map_err(internal)?.and_then(|p| p.into_iter().next()) else {
         return Ok(None);
     };
-    let path = file.into_path().map_err(internal)?;
     allow_media(&app, &path)?;
     Ok(Some(path.to_string_lossy().into_owned()))
 }
@@ -964,6 +983,7 @@ pub fn run() {
             pick_media,
             pick_media_folder,
             report_output_error,
+            output_navigate,
             log_client_error,
             list_bibles,
             import_bibles,
