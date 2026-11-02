@@ -1,6 +1,7 @@
-// Presentaciones (PowerPoint, Impress) → PDF con LibreOffice sin interfaz; luego se muestran como cualquier PDF.
-// Un webview no sabe dibujar un PPTX, y LibreOffice es gratuito y está en Linux, Windows y macOS.
-// La conversión se guarda en caché: la segunda vez es inmediata, y se rehace si el archivo cambia.
+// Presentaciones (PowerPoint, Impress, Keynote) → PDF; luego se muestran como cualquier PDF.
+// Un webview no sabe dibujar un PPTX, así que se convierte con lo que haya en el equipo, en este orden:
+// Windows: PowerPoint (COM) y LibreOffice; macOS: Keynote, PowerPoint y LibreOffice; Linux: LibreOffice.
+// Si uno falla se prueba el siguiente. La conversión se guarda en caché y se rehace si el archivo cambia.
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
@@ -10,15 +11,110 @@ use std::time::{Duration, Instant, UNIX_EPOCH};
 
 pub const PRESENTATION_EXTENSIONS: &[&str] = &["pptx", "ppt", "ppsx", "pps", "odp"];
 
-/// Una presentación grande con muchas imágenes puede tardar; más que esto es que LibreOffice se colgó.
+/// Una presentación grande con muchas imágenes puede tardar; más que esto es que el programa se colgó.
 const TIMEOUT: Duration = Duration::from_secs(180);
 
-/// LibreOffice no admite dos conversiones a la vez con el mismo perfil: se hacen de una en una.
+/// Las conversiones se hacen de una en una: LibreOffice no admite dos a la vez con el mismo perfil,
+/// y PowerPoint y Keynote son una sola aplicación compartida.
 static CONVERTING: Mutex<()> = Mutex::new(());
 
+const POWERPOINT_MAC: &str = "/Applications/Microsoft PowerPoint.app";
+const KEYNOTE: &str = "/Applications/Keynote.app";
+
+/// PowerPoint por COM, sin ventana. Las rutas llegan por variables de entorno, no dentro del script.
+/// Si PowerPoint no estaba abierto con otras presentaciones, se cierra al terminar.
+const POWERPOINT_WINDOWS_SCRIPT: &str = r#"
+$ErrorActionPreference = 'Stop'
+$app = New-Object -ComObject PowerPoint.Application
+try {
+  # Open(archivo, solo lectura, sin título, sin ventana)
+  $pres = $app.Presentations.Open($env:SELAH_ORIGEN, -1, 0, 0)
+  try { $pres.SaveAs($env:SELAH_DESTINO, 32) } finally { $pres.Close() }
+} finally {
+  if ($app.Presentations.Count -eq 0) { $app.Quit() }
+  [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($app)
+}
+"#;
+
+/// AppleScript: las rutas llegan como argumentos (argv).
+const POWERPOINT_MAC_SCRIPT: &[&str] = &[
+    "on run argv",
+    "set origen to POSIX file (item 1 of argv)",
+    "set destino to (POSIX file (item 2 of argv)) as string",
+    "tell application \"Microsoft PowerPoint\"",
+    "open origen",
+    "set pres to active presentation",
+    "save pres in destino as save as PDF",
+    "close pres saving no",
+    "end tell",
+    "end run",
+];
+
+const KEYNOTE_SCRIPT: &[&str] = &[
+    "on run argv",
+    "tell application \"Keynote\"",
+    "set doc to open (POSIX file (item 1 of argv))",
+    "export doc to (POSIX file (item 2 of argv)) as PDF",
+    "close doc saving no",
+    "end tell",
+    "end run",
+];
+
 pub enum OfficeError {
+    /// No hay ningún programa capaz de convertir.
     NotInstalled,
     Failed(String),
+}
+
+/// Un programa capaz de convertir presentaciones a PDF.
+enum Converter {
+    PowerPointWindows,
+    PowerPointMac,
+    Keynote,
+    LibreOffice(PathBuf),
+}
+
+impl Converter {
+    fn name(&self) -> &'static str {
+        match self {
+            Self::PowerPointWindows | Self::PowerPointMac => "PowerPoint",
+            Self::Keynote => "Keynote",
+            Self::LibreOffice(_) => "LibreOffice",
+        }
+    }
+}
+
+/// Los convertidores de este equipo, en orden de preferencia. En Mac, Keynote primero: viene con el sistema.
+fn converters() -> Vec<Converter> {
+    let mut list = Vec::new();
+    if cfg!(windows) && powerpoint_windows_installed() {
+        list.push(Converter::PowerPointWindows);
+    }
+    if cfg!(target_os = "macos") {
+        if Path::new(KEYNOTE).exists() {
+            list.push(Converter::Keynote);
+        }
+        if Path::new(POWERPOINT_MAC).exists() {
+            list.push(Converter::PowerPointMac);
+        }
+    }
+    if let Some(soffice) = find_soffice() {
+        list.push(Converter::LibreOffice(soffice));
+    }
+    list
+}
+
+/// Hay algo con qué convertir presentaciones.
+pub fn available() -> bool {
+    !converters().is_empty()
+}
+
+/// PowerPoint registra su clase COM al instalarse.
+fn powerpoint_windows_installed() -> bool {
+    let mut command = Command::new("reg");
+    command.args(["query", r"HKCR\PowerPoint.Application"]).stdout(Stdio::null()).stderr(Stdio::null());
+    hide_window(&mut command);
+    command.status().is_ok_and(|s| s.success())
 }
 
 /// Ejecutable de LibreOffice: primero el del PATH, luego las rutas de instalación habituales.
@@ -77,6 +173,81 @@ fn cache_dir(source: &Path, cache: &Path) -> Result<PathBuf, String> {
     Ok(cache.join(format!("{:016x}", hasher.finish())))
 }
 
+/// En Windows, sin parpadeo de una consola negra.
+fn hide_window(command: &mut Command) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    #[cfg(not(windows))]
+    let _ = command;
+}
+
+/// Ejecuta con límite de tiempo. Err con la primera línea que el programa escribió como error.
+fn run(mut command: Command, who: &str) -> Result<(), String> {
+    command.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::piped());
+    hide_window(&mut command);
+    let mut child = command.spawn().map_err(|e| e.to_string())?;
+    let started = Instant::now();
+    let status = loop {
+        if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
+            break status;
+        }
+        if started.elapsed() > TIMEOUT {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(format!("{who} tardó demasiado"));
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    };
+    if status.success() {
+        return Ok(());
+    }
+    let mut stderr = String::new();
+    if let Some(mut pipe) = child.stderr.take() {
+        use std::io::Read;
+        let _ = pipe.read_to_string(&mut stderr);
+    }
+    let first = stderr.lines().map(str::trim).find(|l| !l.is_empty()).map(str::to_string);
+    Err(first.unwrap_or_else(|| format!("{who} terminó con error ({status})")))
+}
+
+fn applescript(lines: &[&str], source: &Path, pdf: &Path) -> Command {
+    let mut command = Command::new("osascript");
+    for line in lines {
+        command.arg("-e").arg(line);
+    }
+    command.arg(source).arg(pdf);
+    command
+}
+
+fn command_for(converter: &Converter, source: &Path, pdf: &Path, dir: &Path, cache: &Path) -> Command {
+    match converter {
+        Converter::PowerPointWindows => {
+            let mut command = Command::new("powershell");
+            command
+                .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", POWERPOINT_WINDOWS_SCRIPT])
+                .env("SELAH_ORIGEN", source)
+                .env("SELAH_DESTINO", pdf);
+            command
+        }
+        Converter::PowerPointMac => applescript(POWERPOINT_MAC_SCRIPT, source, pdf),
+        Converter::Keynote => applescript(KEYNOTE_SCRIPT, source, pdf),
+        Converter::LibreOffice(soffice) => {
+            let mut command = Command::new(soffice);
+            command
+                // Perfil propio: si el usuario tiene LibreOffice abierto, la conversión no choca con él.
+                .arg(format!("-env:UserInstallation={}", file_url(&cache.join("perfil-libreoffice"))))
+                .args(["--headless", "--norestore", "--nolockcheck", "--convert-to", "pdf", "--outdir"])
+                .arg(dir)
+                .arg(source);
+            command
+        }
+    }
+}
+
 /// Convierte la presentación y devuelve la ruta del PDF (o la de la caché si ya existía).
 pub fn convert(source: &Path, cache: &Path) -> Result<PathBuf, OfficeError> {
     let dir = cache_dir(source, cache).map_err(OfficeError::Failed)?;
@@ -85,49 +256,24 @@ pub fn convert(source: &Path, cache: &Path) -> Result<PathBuf, OfficeError> {
     if pdf.is_file() {
         return Ok(pdf);
     }
-    let soffice = find_soffice().ok_or(OfficeError::NotInstalled)?;
+    let converters = converters();
+    if converters.is_empty() {
+        return Err(OfficeError::NotInstalled);
+    }
     let _turn = CONVERTING.lock().unwrap_or_else(|e| e.into_inner());
     std::fs::create_dir_all(&dir).map_err(|e| OfficeError::Failed(e.to_string()))?;
 
-    let mut command = Command::new(&soffice);
-    command
-        // Perfil propio: si el usuario tiene LibreOffice abierto, la conversión no choca con él.
-        .arg(format!("-env:UserInstallation={}", file_url(&cache.join("perfil-libreoffice"))))
-        .args(["--headless", "--norestore", "--nolockcheck", "--convert-to", "pdf", "--outdir"])
-        .arg(&dir)
-        .arg(source)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped());
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        command.creation_flags(CREATE_NO_WINDOW);
-    }
-    let mut child = command.spawn().map_err(|e| OfficeError::Failed(e.to_string()))?;
-    let started = Instant::now();
-    let status = loop {
-        if let Some(status) = child.try_wait().map_err(|e| OfficeError::Failed(e.to_string()))? {
-            break status;
+    let mut failures = Vec::new();
+    for converter in &converters {
+        let result = run(command_for(converter, source, &pdf, &dir, cache), converter.name());
+        if pdf.is_file() {
+            return Ok(pdf);
         }
-        if started.elapsed() > TIMEOUT {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(OfficeError::Failed("LibreOffice tardó demasiado".into()));
-        }
-        std::thread::sleep(Duration::from_millis(200));
-    };
-    if pdf.is_file() {
-        return Ok(pdf);
+        let reason = result.err().unwrap_or_else(|| "no creó el PDF".into());
+        eprintln!("[presentación] {} no pudo convertir: {reason}", converter.name());
+        failures.push(format!("{}: {reason}", converter.name()));
     }
-    let mut stderr = String::new();
-    if let Some(mut pipe) = child.stderr.take() {
-        use std::io::Read;
-        let _ = pipe.read_to_string(&mut stderr);
-    }
-    let reason = stderr.lines().find(|l| !l.trim().is_empty()).map(str::to_string);
-    Err(OfficeError::Failed(reason.unwrap_or_else(|| format!("LibreOffice terminó sin crear el PDF ({status})"))))
+    Err(OfficeError::Failed(failures.join(" · ")))
 }
 
 #[cfg(test)]
@@ -139,6 +285,28 @@ mod tests {
         assert_eq!(file_url(Path::new("/home/ana/.cache/selah/perfil")), "file:///home/ana/.cache/selah/perfil");
         assert_eq!(file_url(Path::new("/home/ana maría/x")), "file:///home/ana%20mar%C3%ADa/x");
         assert_eq!(file_url(Path::new(r"C:\Users\Ana Pérez\x")), "file:///C:/Users/Ana%20P%C3%A9rez/x");
+    }
+
+    /// Las rutas nunca van dentro del script: un nombre con comillas no puede romperlo ni inyectar órdenes.
+    #[test]
+    fn rutas_fuera_de_los_scripts() {
+        let source = Path::new("/tmp/Sermón \"especial\"'; rm -rf ~.pptx");
+        let pdf = Path::new("/tmp/salida.pdf");
+        let dir = Path::new("/tmp");
+
+        let windows = command_for(&Converter::PowerPointWindows, source, pdf, dir, dir);
+        let envs: Vec<_> = windows.get_envs().collect();
+        assert!(envs.contains(&(std::ffi::OsStr::new("SELAH_ORIGEN"), Some(source.as_os_str()))));
+        assert!(envs.contains(&(std::ffi::OsStr::new("SELAH_DESTINO"), Some(pdf.as_os_str()))));
+        assert!(windows.get_args().all(|a| a != source.as_os_str()));
+
+        for converter in [Converter::PowerPointMac, Converter::Keynote] {
+            let mac = command_for(&converter, source, pdf, dir, dir);
+            let args: Vec<_> = mac.get_args().collect();
+            // Las dos últimas son las rutas (argv del AppleScript); el script no las contiene.
+            assert_eq!(args[args.len() - 2..], [source.as_os_str(), pdf.as_os_str()]);
+            assert!(args[..args.len() - 2].iter().all(|a| !a.to_string_lossy().contains("Sermón")));
+        }
     }
 
     /// Páginas de un PDF: objetos «/Type /Page» (sin contar el «/Type /Pages» raíz).

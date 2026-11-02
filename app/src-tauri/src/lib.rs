@@ -884,7 +884,7 @@ async fn convert_presentation(app: AppHandle, path: String) -> Result<String, Co
 
 #[tauri::command]
 fn office_available() -> bool {
-    office::find_soffice().is_some()
+    office::available()
 }
 
 /// Elige una imagen o GIF de fondo. None si se cancela.
@@ -992,39 +992,6 @@ fn get_output_state(state: State<'_, AppState>) -> OutputState {
     state.output.lock().unwrap().clone()
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn estilo_con_y_sin_logo() {
-        // Un estilo guardado antes de que existiera el logo sigue valiendo: sin logo, esquina superior derecha.
-        let old: OutputStyle = serde_json::from_str(
-            r#"{"fontScale":1.1,"align":"center","position":"middle","background":"black","font":"system","backgroundImage":null}"#,
-        )
-        .unwrap();
-        assert!(old.logo.image.is_none());
-        assert!(matches!(old.logo.corner, Corner::TopRight));
-
-        let json = r#"{"fontScale":1.5,"align":"left","position":"top","background":"navy","font":"oswald","backgroundImage":null,"logo":{"image":"/x/logo.png","corner":"bottomRight","size":"large","opacity":0.4}}"#;
-        let style: OutputStyle = serde_json::from_str(json).unwrap();
-        assert_eq!(serde_json::to_value(&style).unwrap(), serde_json::from_str::<serde_json::Value>(json).unwrap());
-    }
-
-    // Los contenidos llegan de la interfaz en camelCase: un campo mal nombrado solo falla al enviarlo.
-    #[test]
-    fn contenidos_de_la_interfaz() {
-        for json in [
-            r#"{"kind":"timer","durationMs":60000,"endsAt":null,"remainingMs":60000}"#,
-            r#"{"kind":"clock","hour12":true,"seconds":false}"#,
-            r#"{"kind":"text","slides":["a"],"index":0,"credit":"c","background":null}"#,
-            r#"{"kind":"scripture","verses":[{"reference":"Jn 3:16","text":"t","second":{"reference":"Jn 3:16","text":"t"}}],"index":0,"version":"V","copyright":"","second":{"version":"W","copyright":""}}"#,
-        ] {
-            let content: OutputContent = serde_json::from_str(json).expect(json);
-            assert_eq!(serde_json::to_value(&content).unwrap(), serde_json::from_str::<serde_json::Value>(json).unwrap());
-        }
-    }
-}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -1109,4 +1076,38 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn estilo_con_y_sin_logo() {
+        // Un estilo guardado antes de que existiera el logo sigue valiendo: sin logo, esquina superior derecha.
+        let old: OutputStyle = serde_json::from_str(
+            r#"{"fontScale":1.1,"align":"center","position":"middle","background":"black","font":"system","backgroundImage":null}"#,
+        )
+        .unwrap();
+        assert!(old.logo.image.is_none());
+        assert!(matches!(old.logo.corner, Corner::TopRight));
+
+        let json = r#"{"fontScale":1.5,"align":"left","position":"top","background":"navy","font":"oswald","backgroundImage":null,"logo":{"image":"/x/logo.png","corner":"bottomRight","size":"large","opacity":0.4}}"#;
+        let style: OutputStyle = serde_json::from_str(json).unwrap();
+        assert_eq!(serde_json::to_value(&style).unwrap(), serde_json::from_str::<serde_json::Value>(json).unwrap());
+    }
+
+    // Los contenidos llegan de la interfaz en camelCase: un campo mal nombrado solo falla al enviarlo.
+    #[test]
+    fn contenidos_de_la_interfaz() {
+        for json in [
+            r#"{"kind":"timer","durationMs":60000,"endsAt":null,"remainingMs":60000}"#,
+            r#"{"kind":"clock","hour12":true,"seconds":false}"#,
+            r#"{"kind":"text","slides":["a"],"index":0,"credit":"c","background":null}"#,
+            r#"{"kind":"scripture","verses":[{"reference":"Jn 3:16","text":"t","second":{"reference":"Jn 3:16","text":"t"}}],"index":0,"version":"V","copyright":"","second":{"version":"W","copyright":""}}"#,
+        ] {
+            let content: OutputContent = serde_json::from_str(json).expect(json);
+            assert_eq!(serde_json::to_value(&content).unwrap(), serde_json::from_str::<serde_json::Value>(json).unwrap());
+        }
+    }
 }
