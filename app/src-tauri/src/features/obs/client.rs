@@ -35,6 +35,8 @@ pub enum ObsError {
     NotInstalled,
     /// OBS está abierto: si se cambia su configuración ahora, OBS la sobrescribe al cerrar.
     Running,
+    /// OBS está abierto en modo seguro: no carga el WebSocket, así que Selah no puede conectarse.
+    SafeMode,
     Failed(String),
 }
 
@@ -50,6 +52,8 @@ pub struct Detection {
     pub installed: bool,
     pub websocket_enabled: bool,
     pub running: bool,
+    /// Abierto en modo seguro (sin WebSocket): hay que cerrarlo y abrirlo normal.
+    pub safe_mode: bool,
 }
 
 #[derive(Serialize)]
@@ -171,11 +175,46 @@ fn is_running() -> bool {
 
 pub fn detect() -> Detection {
     let config = read_websocket_config();
+    let running = is_running();
     Detection {
         installed: launcher().is_some(),
         websocket_enabled: config.as_ref().and_then(|c| c["server_enabled"].as_bool()).unwrap_or(false),
-        running: is_running(),
+        running,
+        safe_mode: running && in_safe_mode(),
     }
+}
+
+/// Si OBS no se cerró bien (se colgó, se apagó el equipo…), al abrirlo otra vez pregunta si arrancar en modo
+/// seguro; en ese modo no carga el WebSocket. OBS 32 pregunta aunque reciba --disable-shutdown-check.
+/// Lo detecta por los archivos que deja en `.sentinel/` mientras está abierto: con OBS cerrado, los que queden
+/// son de una sesión que terminó mal. Se borran justo antes de que Selah lo abra, para que arranque normal.
+fn clear_unclean_shutdown() {
+    for dir in config_dirs() {
+        let Ok(entries) = std::fs::read_dir(dir.join(".sentinel")) else { continue };
+        for entry in entries.flatten() {
+            if entry.file_name().to_string_lossy().starts_with("run_") {
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
+    }
+}
+
+/// OBS abierto en modo seguro: lo dice el registro de la sesión actual (el más reciente).
+fn in_safe_mode() -> bool {
+    config_dirs().iter().any(|dir| {
+        let Ok(entries) = std::fs::read_dir(dir.join("logs")) else { return false };
+        let newest = entries
+            .flatten()
+            .filter(|e| e.path().extension().is_some_and(|x| x == "txt"))
+            .max_by_key(|e| e.metadata().and_then(|m| m.modified()).ok());
+        newest
+            .and_then(|e| std::fs::read(e.path()).ok())
+            .is_some_and(|log| log_says_safe_mode(&String::from_utf8_lossy(&log)))
+    })
+}
+
+fn log_says_safe_mode(log: &str) -> bool {
+    log.lines().take(200).any(|l| l.contains("Safe Mode enabled") || l.contains("[Safe Mode] Safe mode launch selected"))
 }
 
 /// Activa el servidor WebSocket en la configuración de OBS. Solo con OBS cerrado.
@@ -211,6 +250,7 @@ pub fn launch() -> Result<(), ObsError> {
         return Ok(());
     }
     let (program, args) = launcher().ok_or(ObsError::NotInstalled)?;
+    clear_unclean_shutdown();
     let mut command = Command::new(&program);
     // Sin el aviso de «OBS no se cerró bien», que bloquearía el arranque esperando al usuario.
     command.args(args).arg("--disable-shutdown-check");
@@ -231,10 +271,14 @@ pub async fn connect() -> Result<Client, ObsError> {
         .as_bool()
         .unwrap_or(true)
         .then(|| config["server_password"].as_str().unwrap_or_default().to_string());
-    let client = tokio::time::timeout(CONNECT_TIMEOUT, Client::connect("127.0.0.1", port, password))
-        .await
-        .map_err(|_| ObsError::Failed("OBS no responde".into()))??;
-    Ok(client)
+    let connected = tokio::time::timeout(CONNECT_TIMEOUT, Client::connect("127.0.0.1", port, password)).await;
+    match connected {
+        Ok(Ok(client)) => Ok(client),
+        // Sin WebSocket no hay a qué conectarse: si es por el modo seguro, se dice eso y no un error genérico.
+        _ if is_running() && in_safe_mode() => Err(ObsError::SafeMode),
+        Ok(Err(e)) => Err(e.into()),
+        Err(_) => Err(ObsError::Failed("OBS no responde".into())),
+    }
 }
 
 pub async fn status(client: &Client) -> obws::error::Result<Status> {
@@ -506,4 +550,17 @@ pub async fn set_destination(client: &Client, server: &str, key: &str) -> obws::
         key.to_string()
     };
     client.config().set_stream_service_settings("rtmp_custom", &json!({ "server": server, "key": key })).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reconoce_el_modo_seguro_en_el_registro() {
+        let safe = "22:11:43.508: Crash or unclean shutdown detected\n22:11:55.630: [Safe Mode] Safe mode launch selected, loading third-party plugins is disabled\n22:11:55.640: Safe Mode enabled.\n";
+        assert!(log_says_safe_mode(safe));
+        let normal = "22:11:43.508: Crash or unclean shutdown detected\n22:11:55.631: Command Line Arguments: --disable-shutdown-check\n";
+        assert!(!log_says_safe_mode(normal));
+    }
 }

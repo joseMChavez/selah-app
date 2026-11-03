@@ -164,6 +164,9 @@
           <p>{t("stream.setup.enableText")}</p>
           {#if obs.detection.running}<p class="alert">{t("stream.setup.closeFirst")}</p>{/if}
           <button class="btn primary big" onclick={enable} disabled={busy}>{t("stream.setup.enable")}</button>
+        {:else if obs.detection.running && obs.detection.safeMode}
+          <p class="alert">{t("stream.setup.safeMode")}</p>
+          <button class="btn big" onclick={() => run(detect)} disabled={busy}>{t("stream.setup.checkAgain")}</button>
         {:else if obs.detection.running}
           <p>{t("stream.setup.runningText")}</p>
           <button class="btn primary big" onclick={connectNow} disabled={busy}>{t("stream.setup.connect")}</button>

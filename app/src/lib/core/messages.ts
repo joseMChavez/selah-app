@@ -18,6 +18,7 @@ export function toMessage(e: unknown): Message {
     case "bibleNotFound": return { key: "error.bibleNotFound" };
     case "obsNotInstalled": return { key: "error.obsNotInstalled" };
     case "obsRunning": return { key: "error.obsRunning" };
+    case "obsSafeMode": return { key: "error.obsSafeMode" };
     case "obsNotConnected": return { key: "error.obsNotConnected" };
     case "obs": return { key: "error.obs", params: { message: err.message } };
     case "officeNotInstalled": return { key: "error.officeNotInstalled" };

@@ -14,6 +14,8 @@ pub enum CommandError {
     ObsNotInstalled,
     /// Hay que cerrar OBS para cambiar su configuración.
     ObsRunning,
+    /// OBS está abierto en modo seguro (sin WebSocket).
+    ObsSafeMode,
     ObsNotConnected,
     Obs { message: String },
     /// Para mostrar presentaciones hace falta LibreOffice.

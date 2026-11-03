@@ -86,7 +86,8 @@ export async function launchAndConnect() {
         await connect();
         return;
       } catch (e) {
-        if (Date.now() > deadline) throw e;
+        // En modo seguro OBS nunca abrirá el WebSocket: no tiene sentido seguir esperando.
+        if (Date.now() > deadline || (e as { code?: string })?.code === "obsSafeMode") throw e;
         await new Promise((r) => setTimeout(r, 1500));
       }
     }

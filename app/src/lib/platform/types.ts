@@ -111,6 +111,8 @@ export interface ObsDetection {
   installed: boolean;
   websocketEnabled: boolean;
   running: boolean;
+  /** Abierto en modo seguro (sin WebSocket): hay que cerrarlo y abrirlo normal. */
+  safeMode: boolean;
 }
 
 export interface ObsStatus {
@@ -169,6 +171,7 @@ export type CommandError =
   | { code: "bibleNotFound" }
   | { code: "obsNotInstalled" }
   | { code: "obsRunning" }
+  | { code: "obsSafeMode" }
   | { code: "obsNotConnected" }
   | { code: "obs"; message: string }
   | { code: "storage"; message: string }
