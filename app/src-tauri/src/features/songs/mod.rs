@@ -2,7 +2,7 @@
 // Plugin interno «songs»: la interfaz llama a sus comandos como `plugin:songs|<comando>` (platform/tauri.ts).
 mod commands;
 pub mod domain;
-mod repo;
+pub mod repo;
 
 use tauri::plugin::{Builder, TauriPlugin};
 use tauri::Wry;

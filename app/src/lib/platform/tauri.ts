@@ -45,6 +45,12 @@ export const tauriPlatform: Platform = {
   setlistGet: () => invoke("plugin:songs|setlist_get"),
   setlistSet: (ids) => invoke("plugin:songs|setlist_set", { ids }),
   songsReset: () => invoke("plugin:songs|songs_reset"),
+  transferImportPick: (title, filterName) => invoke("plugin:transfer|transfer_import_pick", { title, filterName }),
+  transferImportApply: (onConflict, addToSetlist, importedSuffix) =>
+    invoke("plugin:transfer|transfer_import_apply", { onConflict, addToSetlist, importedSuffix }),
+  transferImportCancel: () => invoke("plugin:transfer|transfer_import_cancel"),
+  transferExport: (title, filterName, fileName, onlySetlist) =>
+    invoke("plugin:transfer|transfer_export", { title, filterName, fileName, onlySetlist }),
   obsDetect: () => invoke("plugin:obs|obs_detect"),
   obsEnableWebsocket: () => invoke("plugin:obs|obs_enable_websocket"),
   obsLaunch: () => invoke("plugin:obs|obs_launch"),

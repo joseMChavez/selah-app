@@ -15,6 +15,7 @@
     "bible:default",
     "songs:default",
     "settings:default",
-    "obs:default"
+    "obs:default",
+    "transfer:default"
   ]
 }

@@ -24,6 +24,9 @@ pub enum CommandError {
     /// El usuario canceló la descarga.
     OfficeCanceled,
     OfficeDownload { message: String },
+    /// El archivo de letras no se pudo leer (formato desconocido, dañado…).
+    ImportFailed { file: String, reason: String },
+    ExportFailed { reason: String },
     /// No se pudo leer o escribir la base de datos local.
     Storage { message: String },
     Internal { message: String },

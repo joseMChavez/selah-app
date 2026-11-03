@@ -38,6 +38,7 @@ src/
 | `songs` | Biblioteca de letras y lista del culto | `domain.rs` (Song), `repo.rs` |
 | `settings` | Ajustes por clave | `repo.rs` |
 | `obs` | Transmisión con OBS | `client.rs` |
+| `transfer` | Importar y exportar letras (.selah, listas de Holyrics .hpls) | `domain.rs` (validar, repetidas, qué guardar), `formats/`, `repo.rs` |
 
 ### Reglas
 
@@ -67,6 +68,21 @@ src/
 1. Backend: carpeta `features/<nueva>/` con `mod.rs` (copia uno pequeño, como `songs/mod.rs`) y `commands.rs`; `pub mod <nueva>;` en `features/mod.rs`; `.plugin(features::<nueva>::plugin())` en `lib.rs`; `"<nueva>:default"` en `capabilities/default.json`.
 2. Interfaz: carpeta `app/src/lib/features/<nueva>/` con su panel y un `index.ts` que exporte su `SourcePanel` (id, texto, icono, componente); añádelo a la lista de `app/src/lib/features/index.ts`. La consola lo muestra en la barra lateral, sin tocar `Console.svelte`.
 3. El panel recibe `PanelProps` (`core/panels.ts`): lo preparado, lo que está en pantalla, `onprepare`, `onsend` y `onerror`. Usa los que necesites.
+
+### Ejemplo completo: `transfer`
+
+La importación y exportación de letras está hecha como una funcionalidad autónoma, para que sirva de guía. Todo lo suyo vive en `app/src-tauri/src/features/transfer/` y `app/src/lib/features/transfer/`. Fuera de esas carpetas solo hay líneas de registro:
+
+| Dónde | Qué |
+|---|---|
+| `src/features/mod.rs` | `pub mod transfer;` |
+| `src/lib.rs` | `.plugin(features::transfer::plugin())` |
+| `capabilities/default.json` | `"transfer:default"` |
+| `src/core/error.rs` | sus dos errores (`ImportFailed`, `ExportFailed`) |
+| `app/src/lib/features/index.ts` | `transferPanel` en la lista de paneles |
+| `platform/types.ts`, `platform/tauri.ts`, `core/messages.ts`, `i18n/*.ts` | sus llamadas, errores y textos |
+
+Usa piezas públicas de otras funcionalidades: la base (`core::db`), el tipo `Song` y `upsert_song` de `songs`, el selector de archivos (`core::picker`, con su modo `Save`). Un formato nuevo (OpenLyrics, EasyWorship…) es un archivo más en `formats/` con su `read`, reconocido en `commands::read_file`.
 
 ### …un error nuevo
 

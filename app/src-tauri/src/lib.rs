@@ -21,6 +21,7 @@ pub fn run() {
         .plugin(features::songs::plugin())
         .plugin(features::settings::plugin())
         .plugin(features::obs::plugin())
+        .plugin(features::transfer::plugin())
         .manage(Db::default())
         .setup(|app| {
             // La base se abre antes que nada: la interfaz lee sus ajustes al cargar.

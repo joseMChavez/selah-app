@@ -24,6 +24,8 @@ export function toMessage(e: unknown): Message {
     case "conversionFailed": return { key: "error.conversionFailed", params: { file: err.file, reason: err.reason } };
     case "officeBusy": return { key: "error.officeBusy" };
     case "officeCanceled": return { key: "error.officeCanceled" };
+    case "importFailed": return { key: "error.importFailed", params: { file: err.file, reason: err.reason } };
+    case "exportFailed": return { key: "error.exportFailed", params: { reason: err.reason } };
     case "officeDownload": return { key: "error.officeDownload", params: { message: err.message } };
     case "storage": return { key: "error.storage", params: { message: err.message } };
     case "internal": return { key: "error.internal", params: { message: err.message } };

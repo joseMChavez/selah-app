@@ -177,6 +177,8 @@ export type CommandError =
   | { code: "officeBusy" }
   | { code: "officeCanceled" }
   | { code: "officeDownload"; message: string }
+  | { code: "importFailed"; file: string; reason: string }
+  | { code: "exportFailed"; reason: string }
   | { code: "internal"; message: string };
 
 /** LibreOffice para las presentaciones: el del sistema o la copia privada que Selah puede descargar. */
@@ -196,6 +198,38 @@ export interface OfficeProgress {
   total: number;
   /** Ya descargado y comprobado; ahora se extrae. */
   extracting: boolean;
+}
+
+/** Una canción en la vista previa de una importación. */
+export interface ImportSong {
+  title: string;
+  singer: string;
+  slides: number;
+}
+
+export type ImportInvalidReason = "noTitle" | "noLyrics" | "repeated";
+
+export interface ImportPreview {
+  file: string;
+  format: "selah" | "holyrics";
+  fresh: ImportSong[];
+  /** Ya están con la misma letra: no se tocan. */
+  identical: number;
+  /** Ya están con otra letra. */
+  conflicts: ImportSong[];
+  invalid: { title: string; reason: ImportInvalidReason }[];
+  /** Canciones que trae como lista del culto. */
+  setlist: number;
+}
+
+export type OnConflict = "skip" | "replace" | "keepBoth";
+
+export interface ImportResult {
+  added: number;
+  replaced: number;
+  skipped: number;
+  invalid: number;
+  setlistAdded: number;
 }
 
 export interface OutputState {
@@ -265,6 +299,15 @@ export interface Platform {
   setlistSet(ids: string[]): Promise<void>;
   /** Borra la biblioteca de letras y la lista. */
   songsReset(): Promise<void>;
+
+  // Importar y exportar letras (features/transfer)
+  /** Elige un .selah o .hpls y devuelve la vista previa; null si se cancela. No guarda nada. */
+  transferImportPick(title: string, filterName: string): Promise<ImportPreview | null>;
+  /** Guarda lo de la última vista previa. */
+  transferImportApply(onConflict: OnConflict, addToSetlist: boolean, importedSuffix: string): Promise<ImportResult>;
+  transferImportCancel(): Promise<void>;
+  /** Guarda la biblioteca (o solo la lista) en un .selah; null si se cancela. */
+  transferExport(title: string, filterName: string, fileName: string, onlySetlist: boolean): Promise<{ path: string; songs: number } | null>;
 
   // Transmisión con OBS
   obsDetect(): Promise<ObsDetection>;

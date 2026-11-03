@@ -4,5 +4,6 @@ import { biblePanel } from "./bible";
 import { clockPanel } from "./clock";
 import { mediaPanel } from "./media";
 import { textPanel } from "./songs";
+import { transferPanel } from "./transfer";
 
-export const sourcePanels: SourcePanel[] = [biblePanel, textPanel, mediaPanel, clockPanel];
+export const sourcePanels: SourcePanel[] = [biblePanel, textPanel, mediaPanel, clockPanel, transferPanel];
