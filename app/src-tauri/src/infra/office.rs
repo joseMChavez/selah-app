@@ -9,8 +9,6 @@ use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
-pub const PRESENTATION_EXTENSIONS: &[&str] = &["pptx", "ppt", "ppsx", "pps", "odp"];
-
 /// Una presentación grande con muchas imágenes puede tardar; más que esto es que el programa se colgó.
 const TIMEOUT: Duration = Duration::from_secs(180);
 

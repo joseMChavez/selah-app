@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use tauri::{AppHandle, Manager};
 
-use crate::MAIN_LABEL;
+use crate::state::MAIN_LABEL;
 
 pub enum Mode {
     /// Uno o varios archivos.

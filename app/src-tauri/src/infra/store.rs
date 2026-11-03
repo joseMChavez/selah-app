@@ -5,8 +5,9 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusqlite::{params, Connection};
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+use crate::domain::song::Song;
 
 const FILE: &str = "selah.db";
 
@@ -31,17 +32,6 @@ const MIGRATIONS: &[&str] = &["
         song_id TEXT NOT NULL REFERENCES songs(id) ON DELETE CASCADE
     );
 "];
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Song {
-    id: String,
-    title: String,
-    singer: String,
-    writer: String,
-    body: String,
-    background: Option<String>,
-}
 
 pub struct Store {
     conn: Connection,
