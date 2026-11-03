@@ -30,6 +30,8 @@ const SCHEMA = {
   obsTextSource: { initial: null as string | null, valid: isStringOrNull },
   /** "" = el mensaje traducido de siempre. */
   obsWaitMessage: { initial: "", valid: isString },
+  /** Preguntar antes de mostrar algo en la pantalla que ve la congregación. */
+  confirmSend: { initial: true, valid: isBoolean },
   /** Conectar con OBS al abrir Selah si ya está abierto. */
   obsAutoConnect: { initial: true, valid: isBoolean },
 };
@@ -43,7 +45,7 @@ const KEYS = Object.keys(SCHEMA) as SettingKey[];
 /** Grupos que se pueden restablecer por separado en la vista de Ajustes. */
 export const SECTIONS = {
   interface: ["locale", "theme", "tab", "view", "expanded"],
-  projection: ["outputStyle"],
+  projection: ["outputStyle", "confirmSend"],
   bible: ["bible", "bible2", "hiddenBibles"],
   stream: ["obsTextSource", "obsWaitMessage", "obsAutoConnect"],
 } satisfies Record<string, SettingKey[]>;

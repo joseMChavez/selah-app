@@ -81,6 +81,13 @@ const en: Record<MessageKey, string> = {
   "prepared.title": "Prepared",
   "prepared.tag": "preview, not visible yet",
   "prepared.send": "Send to screen",
+  "confirm.title": "Show on the church screen?",
+  "confirm.live": "It replaces what the congregation sees now on {monitor}.",
+  "confirm.opens": "The output screen will open on {monitor}.",
+  "confirm.dontAsk": "Don’t ask again (you can change it in Settings)",
+  "confirm.cancel": "Cancel",
+  "confirm.send": "Yes, show it",
+  "settings.confirmSend": "Ask before sending something to the church screen",
   "prepared.empty": "Choose something in “Content” to prepare it.",
 
   "live.title": "On screen",

@@ -142,6 +142,25 @@
     output = await platform.setOutputContent(content);
   });
 
+  /** Lo que espera confirmación para ir a la pantalla; null si no se está preguntando. */
+  let pendingSend = $state<OutputContent | null>(null);
+  let dontAskAgain = $state(false);
+
+  /** «Enviar a pantalla» desde la consola: antes pregunta, salvo que se haya desactivado en Ajustes. */
+  function requestSend(content: OutputContent) {
+    if (busy || content.kind === "empty") return;
+    if (!settings.confirmSend) return sendPrepared(content);
+    dontAskAgain = false;
+    pendingSend = content;
+  }
+
+  function confirmSend() {
+    const content = pendingSend;
+    pendingSend = null;
+    if (dontAskAgain) setSetting("confirmSend", false);
+    if (content) sendPrepared(content);
+  }
+
   /** «Enviar a pantalla»: si la salida está cerrada, se abre sola en el monitor elegido. */
   const sendPrepared = (content: OutputContent) => run(async () => {
     if (isTyping(document.activeElement)) (document.activeElement as HTMLElement).blur();
@@ -198,6 +217,11 @@
   }
 
   function onKeydown(event: KeyboardEvent) {
+    // Mientras se pregunta, el teclado es del diálogo (Enter confirma en su botón, Escape cancela).
+    if (pendingSend) {
+      if (event.key === "Escape") pendingSend = null;
+      return;
+    }
     if (event.key === "Escape" && expanded) {
       setExpanded(false);
       return;
@@ -371,7 +395,7 @@
             onprepare={prepare}
             onsend={(content) => {
               prepare(content);
-              sendPrepared(content);
+              requestSend(content);
             }}
             onerror={(m) => (error = m)}
           />
@@ -397,7 +421,7 @@
           </div>
         {/if}
         <SlideStrip content={prepared} style={output.style} tone="prepared" onselect={goPrepared} />
-        <button class="btn primary big send" onclick={() => sendPrepared(prepared)} disabled={busy || prepared.kind === "empty"}>
+        <button class="btn primary big send" onclick={() => requestSend(prepared)} disabled={busy || prepared.kind === "empty"}>
           {t("prepared.send")} →
         </button>
       </div>
@@ -465,7 +489,7 @@
             <span class="muted small">{t(preparedPosition.label, { n: preparedPosition.n, total: preparedPosition.total ?? "…" })}</span>
           {/if}
         </div>
-        <button class="btn primary big" onclick={() => sendPrepared(prepared)} disabled={busy || prepared.kind === "empty"}>
+        <button class="btn primary big" onclick={() => requestSend(prepared)} disabled={busy || prepared.kind === "empty"}>
           {t("prepared.send")} →
         </button>
       </div>
@@ -488,6 +512,26 @@
     </footer>
   {/if}
 </div>
+
+{#if pendingSend}
+  <div class="confirm-backdrop" role="presentation" onclick={() => (pendingSend = null)}>
+    <div class="confirm card" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-what" onclick={(e) => e.stopPropagation()} onkeydown={() => {}} tabindex="-1">
+      <h2 id="confirm-title">{t("confirm.title")}</h2>
+      <p id="confirm-what"><strong>{describe(pendingSend)}</strong></p>
+      <p class="muted small">
+        {output.open
+          ? t("confirm.live", { monitor: output.monitorName ?? "" })
+          : t("confirm.opens", { monitor: monitors.find((m) => m.index === selectedIndex)?.name ?? "" })}
+      </p>
+      <label class="check small"><input type="checkbox" bind:checked={dontAskAgain} /> {t("confirm.dontAsk")}</label>
+      <div class="confirm-actions">
+        <button class="btn ghost" onclick={() => (pendingSend = null)}>{t("confirm.cancel")}</button>
+        <!-- svelte-ignore a11y_autofocus -->
+        <button class="btn primary" onclick={confirmSend} autofocus>{t("confirm.send")}</button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .app { height: 100vh; display: flex; flex-direction: column; }
@@ -669,4 +713,10 @@
     .dock { position: sticky; bottom: 0; }
     .prefs { margin-left: 0; }
   }
+  .confirm-backdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: rgb(0 0 0 / 45%); }
+  .confirm { width: min(440px, 100%); padding: 20px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 12px 40px rgb(0 0 0 / 35%); }
+  .confirm h2 { margin: 0; font-size: 1.1rem; }
+  .confirm p { margin: 0; }
+  .confirm .check { display: flex; gap: 8px; align-items: center; }
+  .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
 </style>

@@ -80,6 +80,13 @@ const es = {
   "prepared.title": "Preparado",
   "prepared.tag": "vista previa, aún no visible",
   "prepared.send": "Enviar a pantalla",
+  "confirm.title": "¿Mostrar en la pantalla de la iglesia?",
+  "confirm.live": "Reemplaza lo que la congregación ve ahora en {monitor}.",
+  "confirm.opens": "Se abrirá la pantalla de salida en {monitor}.",
+  "confirm.dontAsk": "No volver a preguntar (se puede cambiar en Ajustes)",
+  "confirm.cancel": "Cancelar",
+  "confirm.send": "Sí, mostrar",
+  "settings.confirmSend": "Preguntar antes de enviar algo a la pantalla de la iglesia",
   "prepared.empty": "Elige algo en «Contenido» para prepararlo.",
 
   "live.title": "En pantalla",
