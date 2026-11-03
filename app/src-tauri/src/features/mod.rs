@@ -7,6 +7,7 @@ pub mod output;
 pub mod presentations;
 pub mod settings;
 pub mod songs;
+pub mod transfer;
 
 #[cfg(test)]
 mod tests {

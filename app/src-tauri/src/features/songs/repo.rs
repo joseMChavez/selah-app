@@ -1,8 +1,22 @@
 // Letras y lista del culto en la base.
-use rusqlite::params;
+use rusqlite::{params, Connection};
 
 use super::domain::Song;
 use crate::core::db::{now_secs, Store};
+
+/// Crea o actualiza una letra. También la usan otras funcionalidades dentro de su propia transacción
+/// (features/transfer/repo.rs).
+pub fn upsert_song(conn: &Connection, song: &Song) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT INTO songs (id, title, singer, writer, body, background, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+         ON CONFLICT(id) DO UPDATE SET title = excluded.title, singer = excluded.singer,
+             writer = excluded.writer, body = excluded.body, background = excluded.background,
+             updated_at = excluded.updated_at",
+        params![song.id, song.title, song.singer, song.writer, song.body, song.background, now_secs()],
+    )?;
+    Ok(())
+}
 
 impl Store {
     pub fn songs(&self) -> rusqlite::Result<Vec<Song>> {
@@ -23,15 +37,7 @@ impl Store {
     }
 
     pub fn save_song(&self, song: &Song) -> rusqlite::Result<()> {
-        self.conn.execute(
-            "INSERT INTO songs (id, title, singer, writer, body, background, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-             ON CONFLICT(id) DO UPDATE SET title = excluded.title, singer = excluded.singer,
-                 writer = excluded.writer, body = excluded.body, background = excluded.background,
-                 updated_at = excluded.updated_at",
-            params![song.id, song.title, song.singer, song.writer, song.body, song.background, now_secs()],
-        )?;
-        Ok(())
+        upsert_song(&self.conn, song)
     }
 
     pub fn delete_song(&mut self, id: &str) -> rusqlite::Result<()> {

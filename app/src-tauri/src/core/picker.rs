@@ -13,6 +13,8 @@ pub enum Mode {
     Files,
     File,
     Folder,
+    /// Guardar un archivo nuevo con ese nombre propuesto (el usuario puede cambiarlo).
+    Save { name: String },
 }
 
 pub struct Request {
@@ -46,12 +48,17 @@ async fn open(app: &AppHandle, request: Request) -> Result<Option<Vec<PathBuf>>,
             let action = match request.mode {
                 Mode::Folder => gtk::FileChooserAction::SelectFolder,
                 Mode::Files | Mode::File => gtk::FileChooserAction::Open,
+                Mode::Save { .. } => gtk::FileChooserAction::Save,
             };
             let parent = parent.gtk_window().ok();
             // Sin etiquetas propias: GTK usa «Abrir» y «Cancelar» en el idioma del sistema.
             let dialog = gtk::FileChooserNative::new(Some(&request.title), parent.as_ref(), action, None, None);
             dialog.set_modal(true);
             dialog.set_select_multiple(matches!(request.mode, Mode::Files));
+            if let Mode::Save { name } = &request.mode {
+                dialog.set_current_name(name);
+                dialog.set_do_overwrite_confirmation(true);
+            }
             if let Some((name, extensions)) = &request.filter {
                 let filter = gtk::FileFilter::new();
                 filter.set_name(Some(name));
@@ -83,6 +90,7 @@ async fn open(app: &AppHandle, request: Request) -> Result<Option<Vec<PathBuf>>,
         Mode::Files => dialog.blocking_pick_files(),
         Mode::File => dialog.blocking_pick_file().map(|f| vec![f]),
         Mode::Folder => dialog.blocking_pick_folder().map(|f| vec![f]),
+        Mode::Save { name } => dialog.set_file_name(name).blocking_save_file().map(|f| vec![f]),
     };
     picked
         .map(|files| files.into_iter().map(|f| f.into_path().map_err(|e| e.to_string())).collect::<Result<Vec<_>, _>>())

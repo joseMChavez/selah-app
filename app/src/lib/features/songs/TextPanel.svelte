@@ -1,6 +1,5 @@
 <script lang="ts">
   // Textos: una biblioteca de letras guardadas, la lista del culto y el texto libre de siempre.
-  import { onMount } from "svelte";
   import { t } from "$lib/i18n/index.svelte";
   import { deleteSong, library, saveSong, setSetlist, type Song } from "$lib/features/songs/library.svelte";
   import { toMessage, type Message } from "$lib/core/messages";
@@ -127,10 +126,14 @@
     confirmDelete = null;
   }
 
-  onMount(() => {
-    // El permiso para leer los fondos no sobrevive a un reinicio de la app.
-    const paths = [...new Set(library.songs.map((s) => s.background).filter((p) => p !== null))];
-    if (paths.length > 0) platform.allowBackgrounds(paths).then((ok) => (backgrounds = new Set(ok))).catch(() => {});
+  // El permiso para leer los fondos no sobrevive a un reinicio de la app. Se pide al abrir y para cada fondo
+  // nuevo que llegue a la biblioteca (por ejemplo, al importar letras), una sola vez por ruta.
+  const requested = new Set<string>();
+  $effect(() => {
+    const missing = [...new Set(library.songs.map((s) => s.background))].filter((p): p is string => p !== null && !requested.has(p));
+    if (missing.length === 0) return;
+    for (const p of missing) requested.add(p);
+    platform.allowBackgrounds(missing).then((ok) => (backgrounds = new Set([...backgrounds, ...ok]))).catch(() => {});
   });
 </script>
 
