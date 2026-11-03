@@ -81,6 +81,13 @@ const it: Record<MessageKey, string> = {
   "prepared.title": "Preparato",
   "prepared.tag": "anteprima, non ancora visibile",
   "prepared.send": "Invia allo schermo",
+  "confirm.title": "Mostrare sullo schermo della chiesa?",
+  "confirm.live": "Sostituisce ciò che la congregazione vede ora su {monitor}.",
+  "confirm.opens": "Si aprirà lo schermo di uscita su {monitor}.",
+  "confirm.dontAsk": "Non chiedere più (si può cambiare nelle Impostazioni)",
+  "confirm.cancel": "Annulla",
+  "confirm.send": "Sì, mostra",
+  "settings.confirmSend": "Chiedi prima di inviare qualcosa allo schermo della chiesa",
   "prepared.empty": "Scegli qualcosa in «Contenuto» per prepararlo.",
 
   "live.title": "Sullo schermo",

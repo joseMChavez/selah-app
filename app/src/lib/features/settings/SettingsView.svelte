@@ -154,6 +154,10 @@
 
   <section class="card">
     <h2>{t("settings.projection")}</h2>
+    <label class="check">
+      <input type="checkbox" checked={settings.confirmSend} onchange={(e) => setSetting("confirmSend", e.currentTarget.checked)} />
+      {t("settings.confirmSend")}
+    </label>
     <StylePanel {style} onchange={onstylechange} {onerror} />
     {@render resetButton("projection", "settings.resetProjection")}
   </section>
