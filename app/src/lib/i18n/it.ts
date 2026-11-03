@@ -62,7 +62,7 @@ const it: Record<MessageKey, string> = {
   "text.count": "{count} diapositive",
 
   "text.label": "Testo",
-  "text.hint": "Scrivi *** su una riga per iniziare un'altra diapositiva.",
+  "text.hint": "Scrivi ** (due o più asterischi) su una riga per iniziare un'altra diapositiva.",
   "text.sample": "Benvenuti\n***\nAnnunci della settimana\n***\nMomento di preghiera",
 
   "media.addFiles": "+ File…",
@@ -223,7 +223,7 @@ const it: Record<MessageKey, string> = {
   "songs.writer": "Autore del testo",
   "songs.lyrics": "Testo",
   "songs.lyricsPlaceholder": "Prima strofa…\n****\nRitornello…",
-  "songs.hint": "Scrivi **** su una riga per passare alla diapositiva successiva. Titolo e autori compaiono sulla prima.",
+  "songs.hint": "Scrivi ** (due o più asterischi) su una riga per passare alla diapositiva successiva. Titolo e autori compaiono sulla prima.",
   "songs.background": "Sfondo proprio",
   "songs.backgroundDefault": "quello generale dello schermo",
   "songs.cancel": "Annulla",
