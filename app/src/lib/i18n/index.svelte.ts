@@ -1,6 +1,6 @@
 // Idioma de la interfaz. Es independiente del idioma de cada Biblia o medio.
 // La preferencia se guarda en la base de datos local (ajuste «locale»; sin valor, el del sistema).
-import { setSetting, settings } from "$lib/settings.svelte";
+import { setSetting, settings } from "$lib/core/settings.svelte";
 import en from "./en";
 import es, { type MessageKey } from "./es";
 import it from "./it";
