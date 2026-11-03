@@ -61,7 +61,7 @@ const es = {
   "text.count": "{count} diapositivas",
 
   "text.label": "Texto",
-  "text.hint": "Escribe *** en una línea para empezar otra diapositiva.",
+  "text.hint": "Escribe ** (dos o más asteriscos) en una línea para empezar otra diapositiva.",
   "text.sample": "Bienvenidos\n***\nAnuncios de la semana\n***\nTiempo de oración",
 
   "media.addFiles": "+ Archivos…",
@@ -222,7 +222,7 @@ const es = {
   "songs.writer": "Escritor (autor de la letra)",
   "songs.lyrics": "Letra",
   "songs.lyricsPlaceholder": "Primera estrofa…\n****\nCoro…",
-  "songs.hint": "Escribe **** en una línea para pasar a la siguiente diapositiva. El título y los autores salen en la primera.",
+  "songs.hint": "Escribe ** (dos o más asteriscos) en una línea para pasar a la siguiente diapositiva. El título y los autores salen en la primera.",
   "songs.background": "Fondo propio",
   "songs.backgroundDefault": "el general de la pantalla",
   "songs.cancel": "Cancelar",

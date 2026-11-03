@@ -1,0 +1,8 @@
+// Paneles de contenido de la consola, en el orden de la barra lateral. Un panel nuevo se añade aquí.
+import type { SourcePanel } from "$lib/core/panels";
+import { biblePanel } from "./bible";
+import { clockPanel } from "./clock";
+import { mediaPanel } from "./media";
+import { textPanel } from "./songs";
+
+export const sourcePanels: SourcePanel[] = [biblePanel, textPanel, mediaPanel, clockPanel];

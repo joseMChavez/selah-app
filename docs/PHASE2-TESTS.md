@@ -70,7 +70,7 @@ Cada prueba se repite en Linux, Windows y macOS (D-006). Los resultados alimenta
 
 ## Prueba 4 — Transmisión con OBS (obs-websocket 5)
 
-**Implementación:** `app/src-tauri/src/obs.rs` con el crate `obws` (MIT). Selah detecta OBS, activa su WebSocket editando `plugin_config/obs-websocket/config.json` (solo con OBS cerrado y con un botón explícito; conserva puerto y contraseña, crea una si no hay), abre OBS con `--disable-shutdown-check` y se conecta a `127.0.0.1`. Crea tres escenas propias (`Selah · Cámara`, `Selah · Cámara + texto`, `Selah · Espera`) y no toca nada más. La clave de emisión no sale de OBS. Vista previa: captura JPEG de la escena al aire cada segundo.
+**Implementación:** `app/src-tauri/src/features/obs/client.rs` con el crate `obws` (MIT). Selah detecta OBS, activa su WebSocket editando `plugin_config/obs-websocket/config.json` (solo con OBS cerrado y con un botón explícito; conserva puerto y contraseña, crea una si no hay), abre OBS con `--disable-shutdown-check` y se conecta a `127.0.0.1`. Crea tres escenas propias (`Selah · Cámara`, `Selah · Cámara + texto`, `Selah · Espera`) y no toca nada más. La clave de emisión no sale de OBS. Vista previa: captura JPEG de la escena al aire cada segundo.
 
 **Respuesta a D-008 («activar WebSocket sin abrir OBS manualmente»):** sí, editando su configuración con OBS cerrado. Con OBS abierto no sirve: OBS sobrescribe la configuración al salir.
 

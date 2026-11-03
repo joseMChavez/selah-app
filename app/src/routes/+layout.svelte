@@ -1,10 +1,10 @@
 <script lang="ts">
   import "../app.css";
   import { i18n } from "$lib/i18n/index.svelte";
-  import { loadLibrary } from "$lib/library.svelte";
+  import { loadLibrary } from "$lib/features/songs/library.svelte";
   import { platform } from "$lib/platform";
-  import { loadSettings } from "$lib/settings.svelte";
-  import { applyTheme, theme } from "$lib/theme.svelte";
+  import { loadSettings } from "$lib/core/settings.svelte";
+  import { applyTheme, theme } from "$lib/core/theme.svelte";
 
   // Cualquier error no controlado queda en el registro de la app para poder diagnosticarlo.
   window.addEventListener("error", (e) => {

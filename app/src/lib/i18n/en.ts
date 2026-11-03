@@ -62,7 +62,7 @@ const en: Record<MessageKey, string> = {
   "text.count": "{count} slides",
 
   "text.label": "Text",
-  "text.hint": "Type *** on a line to start another slide.",
+  "text.hint": "Type ** (two or more asterisks) on a line to start another slide.",
   "text.sample": "Welcome\n***\nThis week's announcements\n***\nTime of prayer",
 
   "media.addFiles": "+ Files…",
@@ -223,7 +223,7 @@ const en: Record<MessageKey, string> = {
   "songs.writer": "Writer (lyrics)",
   "songs.lyrics": "Lyrics",
   "songs.lyricsPlaceholder": "First verse…\n****\nChorus…",
-  "songs.hint": "Type **** on its own line to start the next slide. The title and authors appear on the first one.",
+  "songs.hint": "Type ** (two or more asterisks) on its own line to start the next slide. The title and authors appear on the first one.",
   "songs.background": "Own background",
   "songs.backgroundDefault": "the screen's general one",
   "songs.cancel": "Cancel",
