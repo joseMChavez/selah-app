@@ -46,6 +46,7 @@ impl From<client::ObsError> for CommandError {
         match e {
             client::ObsError::NotInstalled => CommandError::ObsNotInstalled,
             client::ObsError::Running => CommandError::ObsRunning,
+            client::ObsError::SafeMode => CommandError::ObsSafeMode,
             client::ObsError::Failed(message) => CommandError::Obs { message },
         }
     }
