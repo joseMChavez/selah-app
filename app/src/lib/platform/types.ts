@@ -174,7 +174,29 @@ export type CommandError =
   | { code: "storage"; message: string }
   | { code: "officeNotInstalled" }
   | { code: "conversionFailed"; file: string; reason: string }
+  | { code: "officeBusy" }
+  | { code: "officeCanceled" }
+  | { code: "officeDownload"; message: string }
   | { code: "internal"; message: string };
+
+/** LibreOffice para las presentaciones: el del sistema o la copia privada que Selah puede descargar. */
+export interface OfficeStatus {
+  system: boolean;
+  privateCopy: boolean;
+  /** Hay copia privada para este sistema. */
+  downloadable: boolean;
+  installing: boolean;
+  version: string;
+  /** Tamaño de la descarga en bytes. */
+  size: number;
+}
+
+export interface OfficeProgress {
+  downloaded: number;
+  total: number;
+  /** Ya descargado y comprobado; ahora se extrae. */
+  extracting: boolean;
+}
 
 export interface OutputState {
   open: boolean;
@@ -200,10 +222,17 @@ export interface Platform {
   pickBackground(title: string, filterName: string): Promise<string | null>;
   /** Vuelve a permitir fondos guardados tras reiniciar; devuelve los que siguen existiendo. */
   allowBackgrounds(paths: string[]): Promise<string[]>;
-  /** Convierte una presentación a PDF con LibreOffice (o la toma de la caché) y devuelve la ruta del PDF. */
+  /** Convierte una presentación a PDF (LibreOffice, PowerPoint o Keynote; o la toma de la caché) y devuelve la ruta del PDF. */
   convertPresentation(path: string): Promise<string>;
-  /** LibreOffice está instalado (hace falta para las presentaciones). */
+  /** Hay con qué convertir presentaciones. */
   officeAvailable(): Promise<boolean>;
+  officeStatus(): Promise<OfficeStatus>;
+  /** Descarga la copia privada de LibreOffice; termina cuando está lista. */
+  officeInstall(): Promise<void>;
+  officeCancel(): Promise<void>;
+  /** Borra la copia privada (no un LibreOffice del sistema). */
+  officeRemove(): Promise<void>;
+  onOfficeProgress(handler: (progress: OfficeProgress) => void): Promise<() => void>;
   /** URL que el webview puede cargar para un archivo local ya permitido. */
   mediaUrl(path: string): string;
   reportOutputError(message: string): Promise<void>;

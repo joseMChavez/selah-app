@@ -3,12 +3,14 @@
   // lo que borra datos del usuario (las letras, todo) pide confirmación con un segundo clic.
   import { onMount } from "svelte";
   import { bibles, importBibles, loadBibles, removeAllBibles, removeBible, showBible } from "$lib/bibles.svelte";
+  import OfficeDownload from "$lib/components/OfficeDownload.svelte";
   import StylePanel from "$lib/components/StylePanel.svelte";
   import { DEFAULT_STYLE } from "$lib/OutputView.svelte";
   import { locales, setLocale, t, type Locale, type MessageKey } from "$lib/i18n/index.svelte";
   import { library, resetLibrary } from "$lib/library.svelte";
   import { toMessage, type Message } from "$lib/messages";
   import { obs, waitMessage } from "$lib/obs.svelte";
+  import { loadOffice, office, removeOffice } from "$lib/office.svelte";
   import { platform, type BibleInfo, type OutputStyle } from "$lib/platform";
   import { resetSettings, SECTIONS, setSetting, settings } from "$lib/settings.svelte";
   import { setTheme, type ThemeChoice } from "$lib/theme.svelte";
@@ -31,7 +33,7 @@
   ];
 
   /** Sección, o «bible:<id>» para quitar una versión concreta. */
-  type Section = keyof typeof SECTIONS | "songs" | "all" | "bibles" | `bible:${string}`;
+  type Section = keyof typeof SECTIONS | "songs" | "all" | "bibles" | "office" | `bible:${string}`;
 
   let path = $state<string | null | undefined>(undefined);
   let waitDraft = $state(settings.obsWaitMessage);
@@ -88,6 +90,10 @@
     if (confirmed("songs")) run(resetLibrary, "songs");
   }
 
+  function removeOfficeCopy() {
+    if (confirmed("office")) run(removeOffice, "office");
+  }
+
   function resetAll() {
     if (!confirmed("all")) return;
     run(async () => {
@@ -107,6 +113,7 @@
   onMount(() => {
     if (bibles.all.length === 0) loadBibles().catch((e) => onerror(toMessage(e)));
     platform.storePath().then((p) => (path = p)).catch(() => (path = null));
+    loadOffice().catch((e) => onerror(toMessage(e)));
   });
 </script>
 
@@ -196,6 +203,35 @@
         {confirming === "songs" ? t("settings.confirm") : t("settings.resetSongs")}
       </button>
     </div>
+  </section>
+
+  <section class="card">
+    <h2>{t("settings.presentations")}</h2>
+    <p class="muted small">{t("settings.presentationsIntro")}</p>
+    {#if office.status}
+      <div class="row">
+        <span class="label">{t("settings.officeSystem")}</span>
+        <span class="muted">{t(office.status.system ? "settings.officeFound" : "settings.officeNotFound")}</span>
+      </div>
+      <div class="row">
+        <span class="label">{t("settings.officePrivate")}</span>
+        <span class="muted">
+          {office.status.privateCopy
+            ? t("settings.officeReady", { version: office.status.version })
+            : t(office.status.downloadable ? "settings.officeNone" : "settings.officeUnavailable")}
+        </span>
+      </div>
+      {#if office.status.privateCopy}
+        <div class="foot">
+          {#if done === "office"}<span class="ok small">{t("settings.restored")}</span>{/if}
+          <button class="btn" class:danger={confirming === "office"} onclick={removeOfficeCopy}>
+            {confirming === "office" ? t("settings.confirm") : t("settings.officeRemove")}
+          </button>
+        </div>
+      {:else if office.status.downloadable}
+        <OfficeDownload />
+      {/if}
+    {/if}
   </section>
 
   <section class="card">

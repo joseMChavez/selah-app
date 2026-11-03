@@ -1,5 +1,7 @@
 <script lang="ts">
+  import OfficeDownload from "$lib/components/OfficeDownload.svelte";
   import { t } from "$lib/i18n/index.svelte";
+  import { canOfferOffice, loadOffice } from "$lib/office.svelte";
   import { toMessage, type Message } from "$lib/messages";
   import { platform, type MediaFile, type OutputContent } from "$lib/platform";
 
@@ -25,6 +27,8 @@
   /** Lo último que se pidió preparar: si llega tarde una conversión anterior, no lo pisa. */
   let requested: string | null = null;
   let officeMissing = $state(false);
+  /** Presentación que no se pudo convertir: se ofrece descargar LibreOffice y, al terminar, se reintenta. */
+  let needsOffice = $state<MediaFile | null>(null);
   let hasPresentations = $derived(media.some((m) => m.kind === "presentation"));
 
   function prepare(file: MediaFile) {
@@ -46,15 +50,26 @@
         pdf = await platform.convertPresentation(file.path);
         converted[file.path] = pdf;
         officeMissing = false;
+        needsOffice = null;
       } catch (e) {
-        if ((e as { code?: string })?.code === "officeNotInstalled") officeMissing = true;
-        else onerror(toMessage(e));
+        const missing = (e as { code?: string })?.code === "officeNotInstalled";
+        await loadOffice().catch(() => {});
+        if (canOfferOffice()) needsOffice = file;
+        else if (missing) officeMissing = true;
+        if (!missing) onerror(toMessage(e));
         return;
       } finally {
         if (converting === file.path) converting = null;
       }
     }
     if (requested === file.path) onprepare({ kind: "pdf", path: pdf, page: 1 });
+  }
+
+  function retryWithOffice() {
+    const file = needsOffice;
+    needsOffice = null;
+    officeMissing = false;
+    if (file) prepare(file);
   }
 
   /** Añade sin repetir y prepara el primero nuevo, para verlo enseguida en la vista previa. */
@@ -107,7 +122,14 @@
     {/if}
   </div>
   {#if note}<p class="muted small">{note}</p>{/if}
-  {#if officeMissing}<p class="warn">{t("media.noOffice")}</p>{/if}
+  {#if needsOffice}
+    <div class="office">
+      <p class="small">{t("media.officeOffer")}</p>
+      <OfficeDownload onready={retryWithOffice} />
+    </div>
+  {:else if officeMissing}
+    <p class="warn">{t("media.noOffice")}</p>
+  {/if}
 
   {#if media.length === 0}
     <p class="muted">{t("media.empty")}</p>
@@ -138,6 +160,8 @@
 
 <style>
   .media-panel { display: flex; flex-direction: column; gap: 10px; }
+  .office { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; }
+  .office p { margin: 0; }
   .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   .count { margin-left: auto; }
   ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
