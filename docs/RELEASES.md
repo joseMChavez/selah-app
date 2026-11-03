@@ -65,3 +65,4 @@ Los instaladores no están firmados:
 | `v0.3.1` | ❌ Descartada | La etiqueta se creó sobre `06dcd44` (el código de la 0.3.0) antes de fusionar #9 y #10: los instaladores dicen 0.3.1 pero no traen PowerPoint ni Keynote. Aprendizaje: subir la versión en `main` y etiquetar ese commit. Su borrador no se publica. |
 | `v0.3.2` | Pendiente | Presentaciones también con PowerPoint (Windows), Keynote o PowerPoint (macOS), no solo con LibreOffice. Actions con Node 24. |
 | `v0.3.3` | Pendiente | Keynote y PowerPoint en macOS: el archivo se pasa como alias para que la app, en sandbox, pueda abrirlo (antes Keynote decía que no podía abrir el archivo). |
+| `v0.4.0` | Pendiente | Presentaciones con LibreOffice primero; si no hay, Selah ofrece descargar su propia copia (26.2.6, SHA-256 comprobado) sin instalarla en el sistema, y se puede borrar desde Ajustes (D-015). |
