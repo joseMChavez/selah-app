@@ -3,13 +3,13 @@
 import { bookLanguage } from "$lib/features/bible/scripture";
 import { currentBibles, visibleBibles } from "$lib/features/bible/bibles.svelte";
 import type { DeckPosition } from "$lib/features/output/deck";
+import { lastSeen, recentScreens, screenKey } from "$lib/features/output/history.svelte";
 import { toMessage, type Message } from "$lib/core/messages";
 import { setSetting, settings } from "$lib/core/settings.svelte";
 import { platform, type OutputContent, type OutputState, type RemoteInfo } from "$lib/platform";
 import type { RemoteItem, RemoteLive, RemoteStatus } from "./protocol";
 
-const MAX_RECENT = 6;
-const MAX_KEY = 400;
+const MAX_ITEMS = 6;
 
 export const remote = $state({
   info: null as RemoteInfo | null,
@@ -51,41 +51,10 @@ export function watchRemoteClients(): () => void {
   return () => void unlisten.then((fn) => fn());
 }
 
-/** Lo que estuvo en pantalla hace poco, lo más reciente primero. Cada cosa una vez, en la posición en que quedó. */
-const recent = $state<OutputContent[]>([]);
-
-/** Qué es «lo mismo» para la lista: la misma presentación, el mismo pasaje, la misma letra… en cualquier posición.
- *  null para lo que no tiene sentido volver a poner (negro, vacío, patrón, temporizador). */
-export function itemKey(content: OutputContent): string | null {
-  const key = (() => {
-    switch (content.kind) {
-      case "pdf": return `pdf:${content.path}`;
-      case "image": return `image:${content.path}`;
-      case "video": return `video:${content.path}`;
-      case "scripture": return `bible:${content.version}:${content.verses[0]?.reference}:${content.verses.length}`;
-      case "text": return `text:${content.slides.length}:${content.slides[0]}`;
-      case "clock": return "clock";
-      default: return null;
-    }
-  })();
-  return key && key.slice(0, MAX_KEY);
-}
-
-/** La consola lo llama con cada cambio en pantalla (fuera del seguimiento del $effect: lee y escribe la lista). */
-export function rememberLive(content: OutputContent) {
-  const key = itemKey(content);
-  if (!key) return;
-  const old = recent.findIndex((c) => itemKey(c) === key);
-  if (old >= 0) recent.splice(old, 1);
-  recent.unshift($state.snapshot(content) as OutputContent);
-  recent.length = Math.min(recent.length, MAX_RECENT);
-}
-
-/** El contenido de un elemento de «Para mostrar»: lo preparado o lo reciente con esa clave. */
+/** El contenido de un elemento de «Para mostrar». Si también estuvo en pantalla, vale cómo quedó allí
+ *  (la presentación en la página a la que se llegó, no en la que se preparó). */
 export function findItem(key: string, prepared: OutputContent): OutputContent | null {
-  if (itemKey(prepared) === key) return prepared;
-  const found = recent.find((c) => itemKey(c) === key);
-  return found ? ($state.snapshot(found) as OutputContent) : null;
+  return lastSeen(key) ?? (screenKey(prepared) === key ? prepared : null);
 }
 
 /** El teléfono elige versión: cambia la de arriba en la consola (si era la de abajo, deja de serlo). */
@@ -96,15 +65,18 @@ export function chooseBible(id: string) {
 }
 
 function items(live: OutputContent, prepared: OutputContent, describe: (c: OutputContent) => string): RemoteItem[] {
-  const liveKey = itemKey(live);
-  const preparedKey = itemKey(prepared);
+  const liveKey = screenKey(live);
+  const preparedKey = screenKey(prepared);
   const list: RemoteItem[] = [];
-  if (preparedKey && preparedKey !== liveKey) list.push({ key: preparedKey, label: describe(prepared), prepared: true });
-  for (const c of recent) {
-    const key = itemKey(c)!;
-    if (key !== liveKey && key !== preparedKey) list.push({ key, label: describe(c), prepared: false });
+  // Lo preparado solo si no estuvo ya en pantalla: si estuvo, se ofrece cómo quedó allí.
+  if (preparedKey && preparedKey !== liveKey && !lastSeen(preparedKey)) {
+    list.push({ key: preparedKey, label: describe(prepared), prepared: true });
   }
-  return list.slice(0, MAX_RECENT);
+  for (const c of recentScreens()) {
+    const key = screenKey(c)!;
+    if (key !== liveKey) list.push({ key, label: describe(c), prepared: false });
+  }
+  return list.slice(0, MAX_ITEMS);
 }
 
 function liveOf(content: OutputContent, description: string): RemoteLive {

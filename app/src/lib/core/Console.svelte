@@ -17,7 +17,8 @@
   import { setTheme, theme, type ThemeChoice } from "$lib/core/theme.svelte";
   import { loadScripture } from "$lib/features/bible/scripture";
   import { bookName } from "$lib/features/bible/books";
-  import { chooseBible, findItem, rememberLive, remote, remoteStatus, syncRemote, watchRemoteClients } from "$lib/features/remote/console.svelte";
+  import { chooseBible, findItem, remote, remoteStatus, syncRemote, watchRemoteClients } from "$lib/features/remote/console.svelte";
+  import { rememberLive, resume } from "$lib/features/output/history.svelte";
   import type { RemoteCommand } from "$lib/features/remote/protocol";
 
   const MONITOR_POLL_MS = 2000;
@@ -96,6 +97,8 @@
   }
 
   function prepare(content: OutputContent) {
+    // Volver a elegir una presentación que ya estuvo en pantalla la deja en la página donde quedó.
+    content = resume(content);
     prepared = content;
     if (content.kind === "pdf") ensurePageCount(content.path);
   }
@@ -264,7 +267,7 @@
     }
   }
 
-  // Lo que pasa por la pantalla se recuerda para poder volver desde el teléfono.
+  // Lo que pasa por la pantalla se recuerda para poder volver a ello (Medios, teléfono) donde quedó.
   $effect(() => {
     const content = output.content;
     untrack(() => rememberLive(content));
@@ -457,7 +460,7 @@
             onprepare={prepare}
             onsend={(content) => {
               prepare(content);
-              requestSend(content);
+              requestSend(prepared);
             }}
             onerror={(m) => (error = m)}
           />
