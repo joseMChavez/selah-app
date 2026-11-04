@@ -10,6 +10,7 @@ use std::sync::Mutex;
 use tauri::plugin::{Builder, TauriPlugin};
 use tauri::{AppHandle, Manager, Wry};
 
+use self::domain::Verse;
 use self::library::{BibleDirs, Library};
 use crate::core::error::{internal, CommandError};
 
@@ -47,4 +48,11 @@ pub fn bibles_dir(app: &AppHandle) -> Result<BibleDirs, CommandError> {
         builtin: app.path().resource_dir().ok().map(|dir| dir.join("bibles")),
         user: app.path().app_data_dir().map_err(internal)?.join("bibles"),
     })
+}
+
+/// Los versículos de un capítulo; None si no está esa Biblia o ese capítulo. Para otras funcionalidades
+/// (el control remoto), que no deben tocar `BibleState` directamente.
+pub fn chapter(app: &AppHandle, bible_id: &str, book: u32, chapter: u32) -> Option<Vec<Verse>> {
+    let dirs = bibles_dir(app).ok()?;
+    app.state::<BibleState>().0.lock().unwrap().chapter(&dirs, bible_id, book, chapter)
 }

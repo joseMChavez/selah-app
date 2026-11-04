@@ -8,9 +8,11 @@
 
   // Cualquier error no controlado queda en el registro de la app para poder diagnosticarlo.
   window.addEventListener("error", (e) => {
+    if (location.pathname.startsWith("/remote")) return;
     platform.logError(`${e.message} (${e.filename}:${e.lineno})`).catch(() => {});
   });
   window.addEventListener("unhandledrejection", (e) => {
+    if (location.pathname.startsWith("/remote")) return;
     const reason = e.reason instanceof Error ? `${e.reason.message}\n${e.reason.stack}` : JSON.stringify(e.reason);
     platform.logError(`promesa sin capturar: ${reason}`).catch(() => {});
   });
@@ -19,8 +21,14 @@
 
   // Los ajustes se leen antes de dibujar: así no se ve un instante con el idioma o el tema equivocados.
   // La biblioteca de letras y la migración desde localStorage solo hacen falta en la consola.
+  // El control remoto (/remote) se abre en el navegador del teléfono: no hay Tauri ni ajustes que leer.
   const isOutput = location.pathname.startsWith("/output");
-  const ready = isOutput ? loadSettings({ migrate: false }) : loadSettings({ migrate: true }).then(loadLibrary);
+  const isRemote = location.pathname.startsWith("/remote");
+  const ready = isRemote
+    ? Promise.resolve()
+    : isOutput
+      ? loadSettings({ migrate: false })
+      : loadSettings({ migrate: true }).then(loadLibrary);
 
   $effect(() => applyTheme(theme.choice));
   $effect(() => {

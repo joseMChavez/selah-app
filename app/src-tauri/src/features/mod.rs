@@ -5,6 +5,7 @@ pub mod media;
 pub mod obs;
 pub mod output;
 pub mod presentations;
+pub mod remote;
 pub mod settings;
 pub mod songs;
 pub mod transfer;

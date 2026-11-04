@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import OutputView, { DEFAULT_STYLE } from "$lib/features/output/OutputView.svelte";
   import { sourcePanels } from "$lib/features";
   import SettingsView from "$lib/features/settings/SettingsView.svelte";
@@ -15,6 +15,10 @@
   import { formatDuration, init as initObs, obs } from "$lib/features/stream/obs.svelte";
   import { setSetting, settings, storage } from "$lib/core/settings.svelte";
   import { setTheme, theme, type ThemeChoice } from "$lib/core/theme.svelte";
+  import { loadScripture } from "$lib/features/bible/scripture";
+  import { bookName } from "$lib/features/bible/books";
+  import { remote, remoteStatus, syncRemote, watchRemoteClients } from "$lib/features/remote/console.svelte";
+  import type { RemoteCommand } from "$lib/features/remote/protocol";
 
   const MONITOR_POLL_MS = 2000;
   const SETTINGS_ICON = "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z";
@@ -242,6 +246,40 @@
     if (output.content.kind === "pdf") ensurePageCount(output.content.path);
   });
 
+  /** Órdenes del teléfono: hacen lo mismo que los botones de «En pantalla». */
+  function onRemoteCommand(command: RemoteCommand) {
+    switch (command.type) {
+      case "next": return stepLive(true);
+      case "previous": return stepLive(false);
+      case "black": return toggleBlack();
+      case "clear": return send({ kind: "empty" });
+      case "scripture": return showFromRemote(command.book, command.chapter, command.verse);
+    }
+  }
+
+  /** Un versículo pedido desde el teléfono. Ya se confirmó allí, así que va directo a la pantalla. */
+  async function showFromRemote(book: number, chapter: number, verse: number) {
+    const content = await loadScripture(book, chapter, verse);
+    if (!content) {
+      error = { key: "remote.notFound", params: { reference: `${bookName(book, i18n.locale)} ${chapter}:${verse}` } };
+      return;
+    }
+    prepare(content);
+    sendPrepared(content);
+  }
+
+  // El servidor sigue al ajuste (también al restablecer Ajustes).
+  $effect(() => {
+    const enabled = settings.remoteEnabled;
+    untrack(() => syncRemote(enabled));
+  });
+
+  // Cada cambio en pantalla llega a los teléfonos. El servidor guarda el último para los que se conecten después.
+  $effect(() => {
+    const status = remoteStatus(output, livePosition, output.content.kind === "black" && beforeBlack !== null, describe(output.content));
+    platform.remotePublish(status).catch(() => {});
+  });
+
   onMount(() => {
     refreshMonitors();
     initObs();
@@ -254,12 +292,16 @@
     const unlisten = platform.onOutputState((state) => (output = state));
     const unlistenError = platform.onOutputError((message) => (error = { key: "error.fromOutput", params: { message } }));
     const unlistenNavigate = platform.onOutputNavigate(stepLive);
+    const unlistenRemote = platform.onRemoteCommand(onRemoteCommand);
+    const stopWatchingClients = watchRemoteClients();
     const timer = setInterval(refreshMonitors, MONITOR_POLL_MS);
     return () => {
       clearInterval(timer);
       unlisten.then((fn) => fn());
       unlistenError.then((fn) => fn());
       unlistenNavigate.then((fn) => fn());
+      unlistenRemote.then((fn) => fn());
+      stopWatchingClients();
     };
   });
 </script>
@@ -279,6 +321,13 @@
       <button class="status stream-pill" class:on={s.active} class:warn={s.reconnecting} onclick={() => chooseView("stream")}>
         <span class="dot" aria-hidden="true"></span>
         {s.reconnecting ? t("stream.pill.reconnecting") : s.active ? t("stream.pill.onAir", { time: formatDuration(s.durationMs) }) : t("stream.pill.ready")}
+      </button>
+    {/if}
+
+    {#if remote.info?.running}
+      <button class="status stream-pill" class:on={remote.info.clients > 0} onclick={() => chooseView("settings")}>
+        <span class="dot" aria-hidden="true"></span>
+        {t("remote.pill", { n: remote.info.clients })}
       </button>
     {/if}
 

@@ -2,6 +2,7 @@
 // Cada funcionalidad del backend es un plugin interno: sus comandos se llaman «plugin:<funcionalidad>|<comando>».
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import type { RemoteCommand } from "$lib/features/remote/protocol";
 import type { OfficeProgress, OutputState, Platform, StoredSettings } from "./types";
 
 export const tauriPlatform: Platform = {
@@ -45,6 +46,13 @@ export const tauriPlatform: Platform = {
   setlistGet: () => invoke("plugin:songs|setlist_get"),
   setlistSet: (ids) => invoke("plugin:songs|setlist_set", { ids }),
   songsReset: () => invoke("plugin:songs|songs_reset"),
+  remoteInfo: () => invoke("plugin:remote|remote_info"),
+  remoteStart: () => invoke("plugin:remote|remote_start"),
+  remoteStop: () => invoke("plugin:remote|remote_stop"),
+  remoteResetKey: () => invoke("plugin:remote|remote_reset_key"),
+  remotePublish: (status) => invoke("plugin:remote|remote_publish", { status }),
+  onRemoteCommand: (handler) => listen<RemoteCommand>("remote-command", (event) => handler(event.payload)),
+  onRemoteClients: (handler) => listen<number>("remote-clients", (event) => handler(event.payload)),
   transferImportPick: (title, filterName) => invoke("plugin:transfer|transfer_import_pick", { title, filterName }),
   transferImportApply: (onConflict, addToSetlist, importedSuffix) =>
     invoke("plugin:transfer|transfer_import_apply", { onConflict, addToSetlist, importedSuffix }),

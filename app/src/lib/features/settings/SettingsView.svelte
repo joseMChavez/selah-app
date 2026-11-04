@@ -4,6 +4,7 @@
   import { onMount } from "svelte";
   import { bibles, importBibles, loadBibles, removeAllBibles, removeBible, showBible } from "$lib/features/bible/bibles.svelte";
   import OfficeDownload from "$lib/features/presentations/OfficeDownload.svelte";
+  import RemoteSettings from "$lib/features/remote/RemoteSettings.svelte";
   import StylePanel from "$lib/features/output/StylePanel.svelte";
   import { DEFAULT_STYLE } from "$lib/features/output/OutputView.svelte";
   import { locales, setLocale, t, type Locale, type MessageKey } from "$lib/i18n/index.svelte";
@@ -259,6 +260,8 @@
     <p class="muted small">{t("settings.obsKeepsDestination")}</p>
     {@render resetButton("stream", "settings.resetStream")}
   </section>
+
+  <RemoteSettings />
 
   <section class="card danger-zone">
     <h2>{t("settings.storage")}</h2>
