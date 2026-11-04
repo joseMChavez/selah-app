@@ -17,7 +17,14 @@ pub enum Command {
     Clear,
     /// Mostrar un versículo con la Biblia elegida en la consola.
     Scripture { book: u32, chapter: u32, verse: u32 },
+    /// Elegir la versión de la Biblia (la de la consola cambia también).
+    SetBible { id: String },
+    /// Volver a mostrar algo de la lista «Para mostrar» (lo preparado o lo reciente), por su clave.
+    Show { key: String },
 }
+
+/// Más largo que esto no es un id ni una clave de la consola.
+const MAX_TEXT: usize = 512;
 
 impl Command {
     /// None si no es una orden conocida o trae números imposibles.
@@ -32,6 +39,8 @@ impl Command {
             Command::Scripture { book, chapter, verse } => {
                 (1..=100).contains(book) && (1..=200).contains(chapter) && (1..=200).contains(verse)
             }
+            Command::SetBible { id } => !id.is_empty() && id.len() <= MAX_TEXT,
+            Command::Show { key } => !key.is_empty() && key.len() <= MAX_TEXT,
             _ => true,
         }
     }
@@ -69,6 +78,14 @@ mod tests {
             Command::parse(r#"{"type":"scripture","book":43,"chapter":3,"verse":16}"#),
             Some(Command::Scripture { book: 43, chapter: 3, verse: 16 })
         );
+    }
+
+    #[test]
+    fn versiones_y_lista() {
+        assert_eq!(Command::parse(r#"{"type":"setBible","id":"SpanishLBLABible"}"#), Some(Command::SetBible { id: "SpanishLBLABible".into() }));
+        assert_eq!(Command::parse(r#"{"type":"show","key":"pdf:/a.pdf"}"#), Some(Command::Show { key: "pdf:/a.pdf".into() }));
+        assert_eq!(Command::parse(r#"{"type":"setBible","id":""}"#), None);
+        assert_eq!(Command::parse(&format!(r#"{{"type":"show","key":"{}"}}"#, "x".repeat(600))), None);
     }
 
     #[test]

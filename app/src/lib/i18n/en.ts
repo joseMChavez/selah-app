@@ -436,6 +436,8 @@ const en: Record<MessageKey, string> = {
   "remote.back": "◀ Back",
   "remote.noBible": "No Bible is chosen in the console.",
   "remote.notInBible": "{reference} isn’t in this Bible.",
+  "remote.items": "Ready to show",
+  "remote.version": "Bible version",
 };
 
 export default en;

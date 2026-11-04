@@ -17,7 +17,7 @@
   import { setTheme, theme, type ThemeChoice } from "$lib/core/theme.svelte";
   import { loadScripture } from "$lib/features/bible/scripture";
   import { bookName } from "$lib/features/bible/books";
-  import { remote, remoteStatus, syncRemote, watchRemoteClients } from "$lib/features/remote/console.svelte";
+  import { chooseBible, findItem, rememberLive, remote, remoteStatus, syncRemote, watchRemoteClients } from "$lib/features/remote/console.svelte";
   import type { RemoteCommand } from "$lib/features/remote/protocol";
 
   const MONITOR_POLL_MS = 2000;
@@ -254,8 +254,21 @@
       case "black": return toggleBlack();
       case "clear": return send({ kind: "empty" });
       case "scripture": return showFromRemote(command.book, command.chapter, command.verse);
+      case "setBible": return chooseBible(command.id);
+      case "show": {
+        // Lo preparado o algo que estuvo en pantalla (la presentación en la página donde quedó). Ya se confirmó en el teléfono.
+        const content = findItem(command.key, prepared);
+        if (content) sendPrepared(content);
+        return;
+      }
     }
   }
+
+  // Lo que pasa por la pantalla se recuerda para poder volver desde el teléfono.
+  $effect(() => {
+    const content = output.content;
+    untrack(() => rememberLive(content));
+  });
 
   /** Un versículo pedido desde el teléfono. Ya se confirmó allí, así que va directo a la pantalla. */
   async function showFromRemote(book: number, chapter: number, verse: number) {
@@ -276,7 +289,7 @@
 
   // Cada cambio en pantalla llega a los teléfonos. El servidor guarda el último para los que se conecten después.
   $effect(() => {
-    const status = remoteStatus(output, livePosition, output.content.kind === "black" && beforeBlack !== null, describe(output.content));
+    const status = remoteStatus(output, prepared, livePosition, output.content.kind === "black" && beforeBlack !== null, describe);
     platform.remotePublish(status).catch(() => {});
   });
 

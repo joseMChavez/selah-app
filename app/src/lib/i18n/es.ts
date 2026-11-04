@@ -435,6 +435,8 @@ const es = {
   "remote.back": "◀ Atrás",
   "remote.noBible": "No hay ninguna Biblia elegida en la consola.",
   "remote.notInBible": "{reference} no está en esta Biblia.",
+  "remote.items": "Para mostrar",
+  "remote.version": "Versión de la Biblia",
 };
 
 export type MessageKey = keyof typeof es;

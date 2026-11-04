@@ -7,7 +7,18 @@ export type RemoteCommand =
   | { type: "previous" }
   | { type: "black" }
   | { type: "clear" }
-  | { type: "scripture"; book: number; chapter: number; verse: number };
+  | { type: "scripture"; book: number; chapter: number; verse: number }
+  | { type: "setBible"; id: string }
+  | { type: "show"; key: string };
+
+/** Algo que se puede volver a poner en pantalla desde el teléfono: lo preparado en la consola o lo reciente. */
+export interface RemoteItem {
+  key: string;
+  /** Cómo lo describe la consola: «Juan 3:16 (LBLA)», «Presentación.pptx, página 5»… */
+  label: string;
+  /** Lo preparado en la consola (aún no enviado). */
+  prepared: boolean;
+}
 
 /** Lo que está en pantalla, contado para el teléfono. */
 export type RemoteLive =
@@ -30,6 +41,10 @@ export interface RemoteStatus {
   canUnblack: boolean;
   /** Preguntar antes de mostrar algo nuevo (el mismo ajuste de la consola). */
   confirmSend: boolean;
+  /** Lo preparado y lo que estuvo en pantalla hace poco, lo más reciente primero (sin lo que está ahora). */
+  items: RemoteItem[];
+  /** Las versiones que se pueden elegir. */
+  bibles: { id: string; abbreviation: string; name: string }[];
   /** La Biblia elegida en la consola: el teléfono busca en ella. */
   bible: {
     id: string;

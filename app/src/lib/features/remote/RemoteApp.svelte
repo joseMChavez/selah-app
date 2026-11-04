@@ -24,8 +24,8 @@
   let step = $state<Step>({ kind: "books" });
   let query = $state("");
   let problem = $state<string | null>(null);
-  /** Versículo que espera el «¿Seguro?». */
-  let asking = $state<{ book: number; chapter: number; verse: number; text: string } | null>(null);
+  /** Lo que espera el «¿Seguro?»: un versículo o algo de «Para mostrar». */
+  let asking = $state<{ title: string; text: string; command: RemoteCommand } | null>(null);
   let verseList = $state<HTMLOListElement>();
 
   let socket: WebSocket | null = null;
@@ -141,16 +141,25 @@
     openChapter(reference.book, reference.chapter, reference.verseStart ?? undefined);
   }
 
-  /** Tocar un versículo: se pregunta si la consola pregunta; si no, va directo. */
-  function ask(book: number, chapter: number, verse: Verse) {
-    const request = { book, chapter, verse: verse.number, text: verse.text };
-    if (status?.confirmSend) asking = request;
-    else show(request);
+  /** Mostrar algo nuevo: se pregunta si la consola pregunta; si no, va directo. */
+  function confirmThen(title: string, text: string, c: RemoteCommand) {
+    if (status?.confirmSend) asking = { title, text, command: c };
+    else command(c);
   }
 
-  function show(request: { book: number; chapter: number; verse: number }) {
+  function ask(book: number, chapter: number, verse: Verse) {
+    confirmThen(`${chapterTitle(book, chapter)}:${verse.number}`, verse.text, { type: "scripture", book, chapter, verse: verse.number });
+  }
+
+  function confirmed() {
+    if (asking) command(asking.command);
     asking = null;
-    command({ type: "scripture", book: request.book, chapter: request.chapter, verse: request.verse });
+  }
+
+  function chooseBible(id: string) {
+    command({ type: "setBible", id });
+    // Lo abierto era de la otra versión: se vuelve a los libros (los números de capítulo pueden cambiar).
+    step = { kind: "books" };
   }
 
   /** Una línea con lo que está en pantalla, para la barra de abajo. */
@@ -235,7 +244,31 @@
       {/if}
     </section>
 
+    {#if status && status.items.length > 0}
+      <section class="card">
+        <h2>{t("remote.items")}</h2>
+        <div class="items">
+          {#each status.items as item (item.key)}
+            <button class="btn item" onclick={() => confirmThen(item.label, "", { type: "show", key: item.key })} disabled={connection !== "open"}>
+              {#if item.prepared}<span class="tag">{t("prepared.title")}</span>{/if}
+              <span class="label">{item.label}</span>
+            </button>
+          {/each}
+        </div>
+      </section>
+    {/if}
+
     <section class="card bible">
+      {#if status && status.bibles.length > 1 && bible}
+        <label class="version">
+          <span class="muted small">{t("remote.version")}</span>
+          <select class="field" value={bible.id} onchange={(e) => chooseBible(e.currentTarget.value)} disabled={connection !== "open"}>
+            {#each status.bibles as b (b.id)}
+              <option value={b.id}>{b.abbreviation} · {b.name}</option>
+            {/each}
+          </select>
+        </label>
+      {/if}
       <form class="search" onsubmit={search}>
         <input class="field" bind:value={query} placeholder={t("remote.searchPlaceholder")} enterkeyhint="go" autocomplete="off" disabled={!bible} />
         <button class="btn primary" type="submit" disabled={!bible || !query.trim()}>{t("remote.show")}</button>
@@ -304,11 +337,11 @@
   <div class="backdrop" role="presentation" onclick={() => (asking = null)}>
     <div class="confirm card" role="alertdialog" aria-modal="true" aria-labelledby="remote-confirm" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
       <h2 id="remote-confirm">{t("confirm.title")}</h2>
-      <p class="ref">{chapterTitle(request.book, request.chapter)}:{request.verse}</p>
-      <p class="text small">{request.text}</p>
+      <p class="ref">{request.title}</p>
+      {#if request.text}<p class="text small">{request.text}</p>{/if}
       <div class="actions">
         <button class="btn big" onclick={() => (asking = null)}>{t("confirm.cancel")}</button>
-        <button class="btn primary big" onclick={() => show(request)}>{t("confirm.send")}</button>
+        <button class="btn primary big" onclick={confirmed}>{t("confirm.send")}</button>
       </div>
     </div>
   </div>
@@ -339,6 +372,12 @@
   .ref { font-weight: 700; margin: 0; }
   .text { margin: 0; line-height: 1.45; }
   .search { display: flex; gap: 8px; }
+  .version { display: flex; flex-direction: column; gap: 4px; }
+  .version .field { font-size: 16px; }
+  .items { display: flex; flex-direction: column; gap: 6px; }
+  .item { justify-content: flex-start; gap: 8px; min-height: 52px; text-align: left; }
+  .item .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tag { flex: none; font-size: 12px; font-weight: 750; padding: 2px 6px; border-radius: 5px; background: var(--accent-soft); color: var(--text); }
   .search .field { flex: 1; min-width: 0; font-size: 16px; }
   .grid { display: grid; gap: 6px; }
   .books { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); }
