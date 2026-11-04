@@ -14,6 +14,14 @@ export function visibleBibles(): BibleInfo[] {
   return bibles.all.filter((b) => !settings.hiddenBibles.includes(b.id));
 }
 
+/** Las versiones elegidas: la de arriba (si la guardada ya no está, la primera) y la de abajo, si hay. */
+export function currentBibles(): { bible: BibleInfo | null; second: BibleInfo | null } {
+  const available = visibleBibles();
+  const bible = available.find((b) => b.id === settings.bible) ?? available[0] ?? null;
+  const second = settings.bible2 !== bible?.id ? (available.find((b) => b.id === settings.bible2) ?? null) : null;
+  return { bible, second };
+}
+
 export async function loadBibles() {
   try {
     bibles.all = await platform.listBibles();

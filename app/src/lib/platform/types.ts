@@ -1,4 +1,5 @@
 // Tipos compartidos entre la interfaz y el backend. No dependen de Tauri (ver D-010).
+import type { RemoteCommand } from "$lib/features/remote/protocol";
 
 export interface MonitorInfo {
   index: number;
@@ -182,6 +183,7 @@ export type CommandError =
   | { code: "officeDownload"; message: string }
   | { code: "importFailed"; file: string; reason: string }
   | { code: "exportFailed"; reason: string }
+  | { code: "remoteFailed"; reason: string }
   | { code: "internal"; message: string };
 
 /** LibreOffice para las presentaciones: el del sistema o la copia privada que Selah puede descargar. */
@@ -240,6 +242,18 @@ export interface OutputState {
   monitorName: string | null;
   content: OutputContent;
   style: OutputStyle;
+}
+
+/** El control remoto, como lo muestra la consola en Ajustes. */
+export interface RemoteInfo {
+  running: boolean;
+  /** Dirección para el teléfono, con la clave (la del QR). */
+  url: string | null;
+  /** El QR de `url` como SVG. */
+  qr: string | null;
+  /** false si no hay red: el teléfono no podrá llegar. */
+  onNetwork: boolean;
+  clients: number;
 }
 
 export interface Platform {
@@ -302,6 +316,17 @@ export interface Platform {
   setlistSet(ids: string[]): Promise<void>;
   /** Borra la biblioteca de letras y la lista. */
   songsReset(): Promise<void>;
+
+  // Control remoto desde el teléfono (features/remote)
+  remoteInfo(): Promise<RemoteInfo>;
+  remoteStart(): Promise<RemoteInfo>;
+  remoteStop(): Promise<RemoteInfo>;
+  /** Clave nueva: se desconectan los teléfonos y hay que volver a escanear el QR. */
+  remoteResetKey(): Promise<RemoteInfo>;
+  /** Lo que verán los teléfonos (features/remote/protocol.ts). */
+  remotePublish(status: unknown): Promise<void>;
+  onRemoteCommand(handler: (command: RemoteCommand) => void): Promise<() => void>;
+  onRemoteClients(handler: (count: number) => void): Promise<() => void>;
 
   // Importar y exportar letras (features/transfer)
   /** Elige un .selah o .hpls y devuelve la vista previa; null si se cancela. No guarda nada. */

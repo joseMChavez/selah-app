@@ -34,6 +34,8 @@ const SCHEMA = {
   confirmSend: { initial: true, valid: isBoolean },
   /** Conectar con OBS al abrir Selah si ya está abierto. */
   obsAutoConnect: { initial: true, valid: isBoolean },
+  /** Servidor del control remoto encendido; se vuelve a encender al abrir Selah. */
+  remoteEnabled: { initial: false, valid: isBoolean },
 };
 
 type Schema = typeof SCHEMA;
@@ -48,6 +50,7 @@ export const SECTIONS = {
   projection: ["outputStyle", "confirmSend"],
   bible: ["bible", "bible2", "hiddenBibles"],
   stream: ["obsTextSource", "obsWaitMessage", "obsAutoConnect"],
+  remote: ["remoteEnabled"],
 } satisfies Record<string, SettingKey[]>;
 
 function initial(): Settings {

@@ -39,10 +39,11 @@ src/
 | `settings` | Ajustes por clave | `repo.rs` |
 | `obs` | Transmisión con OBS | `client.rs` |
 | `transfer` | Importar y exportar letras (.selah, listas de Holyrics .hpls) | `domain.rs` (validar, repetidas, qué guardar), `formats/`, `repo.rs` |
+| `remote` | Control remoto desde el teléfono (D-018) | `domain.rs` (órdenes, clave), `server.rs` (HTTP y WebSocket) |
 
 ### Reglas
 
-- **Dependencias hacia el núcleo:** una funcionalidad usa `core` y, si lo necesita, el `domain` de otra (por ejemplo, `presentations` usa los tipos de archivo de `media`). Nunca los comandos ni el estado de otra.
+- **Dependencias hacia el núcleo:** una funcionalidad usa `core` y, si lo necesita, el `domain` de otra (por ejemplo, `presentations` usa los tipos de archivo de `media`) o una función pública de su `mod.rs` (por ejemplo, `remote` lee capítulos con `bible::chapter`). Nunca los comandos ni el estado de otra.
 - **`domain.rs` es puro:** si algo necesita Tauri, la base o el disco, no va ahí. Así se prueba con `cargo test` sin abrir la app.
 - **El estado es de cada funcionalidad:** `OutputStore`, `BibleState`, `ObsState`… Cada una lo registra en su `setup`. La base (`Db`) es del núcleo porque la comparten varias; cada funcionalidad escribe sus consultas en su propio `impl Store` (`features/songs/repo.rs`).
 - **Tablas nuevas:** se añade una entrada al final de `MIGRATIONS` en `core/db.rs`. Nunca se edita una entrada publicada.
@@ -102,6 +103,7 @@ app/src/
       bible/  songs/  media/  clock/      panel + estado + index.ts
       output/            OutputView (lo que se dibuja en pantalla), OutputWindow, StylePanel, SlideStrip
       presentations/     descarga de LibreOffice
+      remote/            control remoto: protocol.ts (lo que se dicen teléfono y consola), RemoteApp (la página del teléfono, ruta /remote), RemoteSettings
       stream/            OBS
       settings/          vista de Ajustes
 ```

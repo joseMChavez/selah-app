@@ -2,11 +2,12 @@
   // Navegación de la Biblia en tres pasos: libro → capítulo → versículo.
   // El buscador es un atajo: «Juan 3:16», «Sal 23» o palabras.
   import { onMount, tick, untrack } from "svelte";
-  import { bookName, type BookLanguage } from "$lib/features/bible/books";
+  import { bookName } from "$lib/features/bible/books";
   import { parseQuery } from "$lib/features/bible/reference";
-  import { i18n, locales, t, type Locale } from "$lib/i18n/index.svelte";
+  import { locales, t, type Locale } from "$lib/i18n/index.svelte";
   import { toMessage, type Message } from "$lib/core/messages";
-  import { bibles, importBibles as importFromDisk, loadBibles, visibleBibles } from "$lib/features/bible/bibles.svelte";
+  import { bibles, currentBibles, importBibles as importFromDisk, loadBibles, visibleBibles } from "$lib/features/bible/bibles.svelte";
+  import { bookLanguage, buildScripture } from "$lib/features/bible/scripture";
   import { platform, type BibleInfo, type OutputContent, type SearchHit, type Verse } from "$lib/platform";
   import { setSetting, settings } from "$lib/core/settings.svelte";
 
@@ -45,19 +46,18 @@
   /** Las versiones que se pueden elegir (sin las ocultas en Ajustes). */
   let available = $derived(visibleBibles());
   // La versión elegida se guarda en los ajustes; si ya no existe, se usa la primera.
-  let bibleId = $derived(available.some((b) => b.id === settings.bible) ? settings.bible : (available[0]?.id ?? null));
-  /** Segunda versión que se muestra debajo de la primera; null = solo una. */
-  let secondId = $derived(settings.bible2);
+  let current = $derived(currentBibles());
+  let bibleId = $derived(current.bible?.id ?? null);
   let query = $state("");
   let view = $state<View>({ step: "books" });
   let input = $state<HTMLInputElement>();
   let verseList = $state<HTMLOListElement>();
 
-  let bible = $derived(available.find((b) => b.id === bibleId) ?? null);
-  let secondBible = $derived(secondId !== bibleId ? (available.find((b) => b.id === secondId) ?? null) : null);
+  let bible = $derived(current.bible);
+  /** Segunda versión que se muestra debajo de la primera; null = solo una. */
+  let secondBible = $derived(current.second);
   // Los nombres de libro siguen el idioma de la Biblia, no el de la interfaz.
-  let language = $derived(languageOf(bible));
-  let secondLanguage = $derived(languageOf(secondBible));
+  let language = $derived(bookLanguage(bible));
   let parsed = $derived(parseQuery(query, language));
   let suggestions = $derived(query.trim() && !parsed.reference ? parsed.books.slice(0, 6) : []);
   let preparedRef = $derived(prepared.kind === "scripture" ? prepared.verses[prepared.index]?.reference : null);
@@ -65,10 +65,6 @@
   let groups = $derived(groupByLanguage(available));
   let oldTestament = $derived(bible?.books.filter((b) => b.number < FIRST_NEW_TESTAMENT_BOOK) ?? []);
   let newTestament = $derived(bible?.books.filter((b) => b.number >= FIRST_NEW_TESTAMENT_BOOK) ?? []);
-
-  function languageOf(b: BibleInfo | null): BookLanguage {
-    return b?.language && b.language in locales ? (b.language as BookLanguage) : i18n.locale;
-  }
 
   function groupByLanguage(list: BibleInfo[]) {
     const map = new Map<string, BibleInfo[]>();
@@ -143,20 +139,7 @@
   }
 
   function scripture(book: number, chapter: number, verses: Verse[], start: number, second: Verse[] | null): OutputContent | null {
-    if (!bible) return null;
-    const index = verses.findIndex((v) => v.number === start);
-    const parallel = (n: number) => {
-      const text = second?.find((v) => v.number === n)?.text;
-      return text ? { reference: `${bookName(book, secondLanguage)} ${chapter}:${n}`, text } : null;
-    };
-    return {
-      kind: "scripture",
-      verses: verses.map((v) => ({ reference: refText(book, chapter, v.number), text: v.text, second: parallel(v.number) })),
-      index: Math.max(index, 0),
-      version: bible.abbreviation,
-      copyright: bible.copyright,
-      second: secondBible && second ? { version: secondBible.abbreviation, copyright: secondBible.copyright } : null,
-    };
+    return bible ? buildScripture(bible, secondBible, book, chapter, verses, start, second) : null;
   }
 
   function prepareFrom(book: number, chapter: number, verses: Verse[], start: number, second: Verse[] | null) {

@@ -68,18 +68,11 @@ pub async fn remove_bible(
 #[tauri::command]
 pub async fn get_chapter(
     app: AppHandle,
-    state: State<'_, BibleState>,
     bible_id: String,
     book: u32,
     chapter: u32,
 ) -> Result<Vec<Verse>, CommandError> {
-    let dir = bibles_dir(&app)?;
-    state
-        .0
-        .lock()
-        .unwrap()
-        .chapter(&dir, &bible_id, book, chapter)
-        .ok_or(CommandError::BibleNotFound)
+    super::chapter(&app, &bible_id, book, chapter).ok_or(CommandError::BibleNotFound)
 }
 
 #[tauri::command]
