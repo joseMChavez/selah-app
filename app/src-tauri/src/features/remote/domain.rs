@@ -66,6 +66,26 @@ pub fn url(host: &str, port: u16, key: &str) -> String {
     format!("http://{host}:{port}/remote?key={key}")
 }
 
+/// Manifiesto de la app del teléfono (PWA). A pantalla completa y en vertical, como una app.
+pub fn manifest(start_url: &str) -> String {
+    serde_json::json!({
+        "name": "Selah · Control remoto",
+        "short_name": "Selah",
+        "start_url": start_url,
+        "scope": "/",
+        "display": "fullscreen",
+        "display_override": ["fullscreen", "standalone"],
+        "orientation": "portrait",
+        "background_color": "#f4f2ed",
+        "theme_color": "#1d3a78",
+        "icons": [
+            { "src": "/remote/icon-192.png", "sizes": "192x192", "type": "image/png" },
+            { "src": "/remote/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+        ]
+    })
+    .to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -105,5 +125,12 @@ mod tests {
         assert!(!same_key("", &key));
         assert!(!is_key("../../etc"));
         assert_eq!(url("192.168.1.20", 7300, "ab"), "http://192.168.1.20:7300/remote?key=ab");
+    }
+
+    #[test]
+    fn manifiesto() {
+        let m: serde_json::Value = serde_json::from_str(&manifest("/remote?key=ab")).unwrap();
+        assert_eq!(m["start_url"], "/remote?key=ab");
+        assert_eq!(m["display"], "fullscreen");
     }
 }

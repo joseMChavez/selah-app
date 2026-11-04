@@ -3,6 +3,7 @@
 //   GET /remote?key=…    la página (la misma interfaz de Selah, ruta /remote)
 //   GET /_app/…          sus archivos
 //   GET /api/chapter     versículos de un capítulo, para elegir en el teléfono
+//   GET /remote.webmanifest?key=…   para instalarla como app (PWA); con una clave válida, la app abre ya vinculada
 //   GET /ws?key=…        WebSocket: el teléfono manda órdenes (domain::Command) y recibe lo que hay en pantalla
 //
 // Todo lo que no es la página pide la clave. Las órdenes no se aplican aquí: se pasan a la consola.
@@ -65,6 +66,7 @@ pub async fn start(shared: Shared) -> std::io::Result<u16> {
                     .route("/", get(|| async { Redirect::to("/remote") }))
                     .route("/ws", get(socket))
                     .route("/api/chapter", get(chapter))
+                    .route("/remote.webmanifest", get(manifest))
                     .fallback(get(asset))
                     .with_state(shared);
                 tauri::async_runtime::spawn(async move {
@@ -141,6 +143,17 @@ async fn client(shared: Shared, mut socket: WebSocket) {
     }
     let _ = socket.send(Message::Close(None)).await;
     shared.connected(-1);
+}
+
+/// El manifiesto de la app instalada. Lleva la clave en `start_url` solo si es la vigente: el teléfono guarda
+/// lo instalado aparte del navegador y, sin ella, la app abriría sin vincular.
+async fn manifest(State(shared): State<Shared>, Query(query): Query<KeyQuery>) -> Response {
+    let start = match query.key.as_deref() {
+        Some(key) if shared.allows(Some(key)) => format!("/remote?key={key}"),
+        _ => "/remote".to_string(),
+    };
+    let body = super::domain::manifest(&start);
+    ([(header::CONTENT_TYPE, "application/manifest+json"), (header::CACHE_CONTROL, "no-cache")], body).into_response()
 }
 
 #[derive(Deserialize)]

@@ -9,6 +9,7 @@
   import type { RemoteCommand, RemoteStatus, ServerMessage } from "./protocol";
 
   const KEY_STORAGE = "selah-remote-key";
+  const HINT_STORAGE = "selah-remote-install-hint";
   const RETRY_MS = [1000, 2000, 3000, 5000];
   const FIRST_NEW_TESTAMENT_BOOK = 40;
 
@@ -27,6 +28,13 @@
   /** Lo que espera el «¿Seguro?»: un versículo o algo de «Para mostrar». */
   let asking = $state<{ title: string; text: string; command: RemoteCommand } | null>(null);
   let verseList = $state<HTMLOListElement>();
+
+  /** Abierta como app instalada (pantalla de inicio): ya ocupa toda la pantalla. */
+  const installed = matchMedia("(display-mode: fullscreen), (display-mode: standalone)").matches || (navigator as { standalone?: boolean }).standalone === true;
+  /** Android permite pantalla completa desde el navegador; el iPhone no (allí se usa «Agregar a inicio»). */
+  const canFullscreen = !installed && document.fullscreenEnabled;
+  let fullscreen = $state(false);
+  let showInstallHint = $state(!installed && !hintDismissed());
 
   let socket: WebSocket | null = null;
   let retries = 0;
@@ -49,6 +57,28 @@
     } catch {
       return fromUrl;
     }
+  }
+
+  function hintDismissed(): boolean {
+    try {
+      return localStorage.getItem(HINT_STORAGE) === "1";
+    } catch {
+      return false;
+    }
+  }
+
+  function dismissHint() {
+    showInstallHint = false;
+    try {
+      localStorage.setItem(HINT_STORAGE, "1");
+    } catch {
+      // Sin almacenamiento la ayuda vuelve a salir la próxima vez: no pasa nada.
+    }
+  }
+
+  function toggleFullscreen() {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    else document.documentElement.requestFullscreen({ navigationUI: "hide" }).catch(() => {});
   }
 
   function connect() {
@@ -186,6 +216,15 @@
   }
 
   onMount(() => {
+    // Tocar rápido los botones no debe acercar la página (doble toque), ni enfocar un campo (iPhone).
+    document.querySelector('meta[name="viewport"]')?.setAttribute("content", "width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover");
+    const onFullscreen = () => (fullscreen = document.fullscreenElement !== null);
+    document.addEventListener("fullscreenchange", onFullscreen);
+    // El navegador solo deja pasar a pantalla completa tras un toque: el primero lo hace.
+    const firstTouch = () => {
+      if (canFullscreen && !document.fullscreenElement) toggleFullscreen();
+    };
+    if (canFullscreen) document.addEventListener("pointerup", firstTouch, { once: true });
     connect();
     // El teléfono duerme la página al apagar la pantalla: al volver, se reconecta enseguida.
     const wake = () => {
@@ -194,6 +233,8 @@
     document.addEventListener("visibilitychange", wake);
     return () => {
       document.removeEventListener("visibilitychange", wake);
+      document.removeEventListener("fullscreenchange", onFullscreen);
+      document.removeEventListener("pointerup", firstTouch);
       clearTimeout(retryTimer);
       socket?.close();
     };
@@ -202,17 +243,40 @@
 
 <svelte:head>
   <title>Selah · {t("remote.title")}</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <!-- Instalable en la pantalla de inicio. El manifiesto lleva la clave para que la app abra ya vinculada. -->
+  <link rel="manifest" href={`/remote.webmanifest${key ? `?key=${encodeURIComponent(key)}` : ""}`} />
+  <link rel="apple-touch-icon" href="/remote/apple-touch-icon.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Selah" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#1d3a78" />
 </svelte:head>
 
 <div class="remote">
   <header>
     <div class="brand"><img src="/favicon.svg" alt="" />Selah</div>
-    <span class="conn" class:ok={connection === "open"}>
-      <span class="dot" aria-hidden="true"></span>
-      {connection === "open" ? t("remote.connected") : connection === "connecting" ? t("remote.connecting") : ""}
-    </span>
+    <div class="head-right">
+      <span class="conn" class:ok={connection === "open"}>
+        <span class="dot" aria-hidden="true"></span>
+        {connection === "open" ? t("remote.connected") : connection === "connecting" ? t("remote.connecting") : ""}
+      </span>
+      {#if canFullscreen}
+        <button class="btn ghost icon" onclick={toggleFullscreen} aria-label={t(fullscreen ? "remote.exitFullscreen" : "remote.fullscreen")}>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d={fullscreen ? "M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" : "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"} />
+          </svg>
+        </button>
+      {/if}
+    </div>
   </header>
+
+  {#if showInstallHint && connection === "open"}
+    <p class="hint small">
+      <span>{t("remote.installHint")}</span>
+      <button class="btn ghost" onclick={dismissHint} aria-label={t("error.dismiss")}>✕</button>
+    </p>
+  {/if}
 
   {#if connection === "noKey" || connection === "rejected"}
     <p class="notice">{t(connection === "noKey" ? "remote.noKey" : "remote.rejected")}</p>
@@ -356,8 +420,21 @@
     flex-direction: column;
     gap: 12px;
     min-height: 100vh;
+    min-height: 100dvh;
+    padding-top: calc(12px + env(safe-area-inset-top));
     background: var(--bg);
+    /* Sin zoom por doble toque: los botones se pulsan rápido y seguido. */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none;
+    user-select: none;
   }
+  .remote :global(button), .remote :global(select), .remote :global(input) { touch-action: manipulation; }
+  .head-right { display: flex; align-items: center; gap: 6px; }
+  .btn.icon { min-height: 40px; width: 40px; padding: 0; justify-content: center; }
+  .btn.icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .hint { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; padding: 6px 6px 6px 12px; border-radius: 8px; background: var(--accent-soft); }
+  .hint .btn { min-height: 32px; padding: 0 10px; }
   header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .brand { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 750; }
   .brand img { width: 28px; height: 28px; }

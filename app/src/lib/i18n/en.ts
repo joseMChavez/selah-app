@@ -438,6 +438,9 @@ const en: Record<MessageKey, string> = {
   "remote.notInBible": "{reference} isn’t in this Bible.",
   "remote.items": "Ready to show",
   "remote.version": "Bible version",
+  "remote.fullscreen": "Full screen",
+  "remote.exitFullscreen": "Exit full screen",
+  "remote.installHint": "To keep it as an app: browser menu → “Add to Home screen” (on iPhone: Share → “Add to Home Screen”).",
 };
 
 export default en;
