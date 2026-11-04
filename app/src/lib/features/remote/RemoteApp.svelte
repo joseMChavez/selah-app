@@ -9,7 +9,6 @@
   import type { RemoteCommand, RemoteStatus, ServerMessage } from "./protocol";
 
   const KEY_STORAGE = "selah-remote-key";
-  const HINT_STORAGE = "selah-remote-install-hint";
   const RETRY_MS = [1000, 2000, 3000, 5000];
   const FIRST_NEW_TESTAMENT_BOOK = 40;
 
@@ -34,7 +33,6 @@
   /** Android permite pantalla completa desde el navegador; el iPhone no (allí se usa «Agregar a inicio»). */
   const canFullscreen = !installed && document.fullscreenEnabled;
   let fullscreen = $state(false);
-  let showInstallHint = $state(!installed && !hintDismissed());
 
   let socket: WebSocket | null = null;
   let retries = 0;
@@ -56,23 +54,6 @@
       return fromUrl ?? localStorage.getItem(KEY_STORAGE);
     } catch {
       return fromUrl;
-    }
-  }
-
-  function hintDismissed(): boolean {
-    try {
-      return localStorage.getItem(HINT_STORAGE) === "1";
-    } catch {
-      return false;
-    }
-  }
-
-  function dismissHint() {
-    showInstallHint = false;
-    try {
-      localStorage.setItem(HINT_STORAGE, "1");
-    } catch {
-      // Sin almacenamiento la ayuda vuelve a salir la próxima vez: no pasa nada.
     }
   }
 
@@ -271,13 +252,6 @@
     </div>
   </header>
 
-  {#if showInstallHint && connection === "open"}
-    <p class="hint small">
-      <span>{t("remote.installHint")}</span>
-      <button class="btn ghost" onclick={dismissHint} aria-label={t("error.dismiss")}>✕</button>
-    </p>
-  {/if}
-
   {#if connection === "noKey" || connection === "rejected"}
     <p class="notice">{t(connection === "noKey" ? "remote.noKey" : "remote.rejected")}</p>
   {:else}
@@ -433,8 +407,6 @@
   .head-right { display: flex; align-items: center; gap: 6px; }
   .btn.icon { min-height: 40px; width: 40px; padding: 0; justify-content: center; }
   .btn.icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-  .hint { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; padding: 6px 6px 6px 12px; border-radius: 8px; background: var(--accent-soft); }
-  .hint .btn { min-height: 32px; padding: 0 10px; }
   header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .brand { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 750; }
   .brand img { width: 28px; height: 28px; }

@@ -440,7 +440,6 @@ const it: Record<MessageKey, string> = {
   "remote.version": "Versione della Bibbia",
   "remote.fullscreen": "Schermo intero",
   "remote.exitFullscreen": "Esci da schermo intero",
-  "remote.installHint": "Per averla come app: menu del browser → «Aggiungi a schermata Home» (su iPhone: Condividi → «Aggiungi alla schermata Home»).",
 };
 
 export default it;

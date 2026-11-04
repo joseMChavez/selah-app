@@ -439,7 +439,6 @@ const es = {
   "remote.version": "Versión de la Biblia",
   "remote.fullscreen": "Pantalla completa",
   "remote.exitFullscreen": "Salir de pantalla completa",
-  "remote.installHint": "Para tenerla como app: menú del navegador → «Agregar a la pantalla de inicio» (en iPhone: Compartir → «Agregar a inicio»).",
 };
 
 export type MessageKey = keyof typeof es;
