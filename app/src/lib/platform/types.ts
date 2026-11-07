@@ -263,6 +263,16 @@ export type PlanItem = { id: string } & (
   | { kind: "song"; songId: string }
   | { kind: "media"; path: string; media: MediaKind }
   | { kind: "pause"; title: string; durationMs: number; background?: string | null }
+  | {
+      kind: "scripture";
+      book: number;
+      chapter: number;
+      /** null = el capítulo entero. */
+      verseStart: number | null;
+      verseEnd: number | null;
+      /** Versión fija (id de la Biblia); null = la elegida en la consola al mostrarlo. */
+      bible?: string | null;
+    }
 );
 
 export interface OutputState {

@@ -32,6 +32,17 @@ pub enum ItemContent {
     Song { song_id: String },
     /// Imagen, video, PDF o presentación, por su ruta en este equipo.
     Media { path: String, media: MediaKind },
+    /// Versículos que el predicador quiere tener a un clic: un capítulo entero o un rango.
+    Scripture {
+        book: u32,
+        chapter: u32,
+        /// None = el capítulo entero.
+        verse_start: Option<u32>,
+        verse_end: Option<u32>,
+        /// Versión fija (id de la Biblia); None = la elegida en la consola al mostrarlo.
+        #[serde(default)]
+        bible: Option<String>,
+    },
     /// Un tiempo con cuenta atrás en pantalla (receso, conferencia).
     Pause {
         title: String,
@@ -62,12 +73,17 @@ mod tests {
             {"id":"1","kind":"section","title":"Alabanza"},
             {"id":"2","kind":"song","songId":"abc"},
             {"id":"3","kind":"media","path":"/x/a.mp4","media":"video"},
-            {"id":"4","kind":"pause","title":"Receso","durationMs":600000}
+            {"id":"4","kind":"pause","title":"Receso","durationMs":600000},
+            {"id":"5","kind":"scripture","book":43,"chapter":3,"verseStart":16,"verseEnd":18}
         ]"#;
         let items: Vec<PlanItem> = serde_json::from_str(json).unwrap();
         assert_eq!(items[1].content, ItemContent::Song { song_id: "abc".into() });
         assert_eq!(items[2].content.file(), Some("/x/a.mp4"));
         assert_eq!(items[3].content, ItemContent::Pause { title: "Receso".into(), duration_ms: 600_000, background: None });
+        assert_eq!(
+            items[4].content,
+            ItemContent::Scripture { book: 43, chapter: 3, verse_start: Some(16), verse_end: Some(18), bible: None }
+        );
         let back = serde_json::to_string(&items[1]).unwrap();
         assert_eq!(back, r#"{"id":"2","kind":"song","songId":"abc"}"#);
     }

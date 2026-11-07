@@ -490,6 +490,20 @@ const en: Record<MessageKey, string> = {
   "plans.copying": "Copying…",
   "settings.plansFiles": "Plan media is stored as a copy in Selah's folder and takes {size} MB. Copies no plan uses any more are deleted automatically.",
   "error.copyFailed": "Could not copy “{file}” into Selah's folder: {reason}",
+  "plans.verses": "Verses",
+  "plans.addVerses": "Add verses",
+  "plans.versesLabel": "References, one per line or separated by “;”",
+  "plans.versesPlaceholder": "John 3:16-18\nPs 23\nRom 8:28",
+  "plans.notUnderstood": "reference not recognized",
+  "plans.version": "Version",
+  "plans.versionConsole": "The one chosen in the console when shown (now {version})",
+  "plans.versesHint": "Without verses the whole chapter is shown. Each reference stays in the plan one click away; if a second version is chosen in the console, it is shown below.",
+  "plans.addCount": "Add ({count})",
+  "plans.addedVerses": "{count} references added to the plan",
+  "plans.consoleVersion": "console version ({version})",
+  "plans.notInBible": "This version does not have that book or chapter",
+  "plans.verseNotFound": "The chosen version does not have {reference}",
+  "plans.versesNotFound": "Not added because the version does not have them: {list}",
 };
 
 export default en;

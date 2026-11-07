@@ -490,6 +490,20 @@ const it: Record<MessageKey, string> = {
   "plans.copying": "Copia in corso…",
   "settings.plansFiles": "I media dei piani sono salvati come copia nella cartella di Selah e occupano {size} MB. Le copie che nessun piano usa più vengono eliminate da sole.",
   "error.copyFailed": "Impossibile copiare «{file}» nella cartella di Selah: {reason}",
+  "plans.verses": "Versetti",
+  "plans.addVerses": "Aggiungi versetti",
+  "plans.versesLabel": "Riferimenti, uno per riga o separati da «;»",
+  "plans.versesPlaceholder": "Giovanni 3:16-18\nSal 23\nRm 8:28",
+  "plans.notUnderstood": "riferimento non riconosciuto",
+  "plans.version": "Versione",
+  "plans.versionConsole": "Quella scelta nella console al momento (ora {version})",
+  "plans.versesHint": "Senza versetti si mostra il capitolo intero. Ogni riferimento resta nel piano a un clic; se nella console è scelta una seconda versione, appare sotto.",
+  "plans.addCount": "Aggiungi ({count})",
+  "plans.addedVerses": "{count} riferimenti aggiunti al piano",
+  "plans.consoleVersion": "versione della console ({version})",
+  "plans.notInBible": "Questa versione non ha quel libro o capitolo",
+  "plans.verseNotFound": "La versione scelta non ha {reference}",
+  "plans.versesNotFound": "Non aggiunti perché la versione non li ha: {list}",
 };
 
 export default it;

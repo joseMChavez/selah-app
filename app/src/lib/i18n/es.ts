@@ -489,6 +489,20 @@ const es = {
   "plans.copying": "Copiando…",
   "settings.plansFiles": "Los medios de los planes se guardan como copia en la carpeta de Selah y ocupan {size} MB. Las copias que ya no usa ningún plan se borran solas.",
   "error.copyFailed": "No se pudo copiar «{file}» a la carpeta de Selah: {reason}",
+  "plans.verses": "Versículos",
+  "plans.addVerses": "Añadir versículos",
+  "plans.versesLabel": "Citas, una por línea o separadas por «;»",
+  "plans.versesPlaceholder": "Juan 3:16-18\nSal 23\nRom 8:28",
+  "plans.notUnderstood": "no se reconoce la cita",
+  "plans.version": "Versión",
+  "plans.versionConsole": "La elegida en la consola al mostrarlo (ahora {version})",
+  "plans.versesHint": "Sin versículos se muestra el capítulo entero. Cada cita queda en el plan a un clic; si hay una segunda versión elegida en la consola, se muestra debajo.",
+  "plans.addCount": "Añadir ({count})",
+  "plans.addedVerses": "{count} citas añadidas al plan",
+  "plans.consoleVersion": "versión de la consola ({version})",
+  "plans.notInBible": "Esta versión no tiene ese libro o capítulo",
+  "plans.verseNotFound": "La versión elegida no tiene {reference}",
+  "plans.versesNotFound": "No se añadieron porque la versión no las tiene: {list}",
 };
 
 export type MessageKey = keyof typeof es;

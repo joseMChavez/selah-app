@@ -7,6 +7,9 @@
   import { formatCountdown, preparedTimer } from "$lib/features/clock/clock";
   import { screenKey } from "$lib/features/output/history.svelte";
   import { library, songContent } from "$lib/features/songs/library.svelte";
+  import { bibles, currentBibles, visibleBibles } from "$lib/features/bible/bibles.svelte";
+  import { bookLanguage } from "$lib/features/bible/scripture";
+  import { bibleFor, missingIn, parseList, referenceLabel, scriptureContent, type ScriptureItem } from "./scripture";
   import { splitSlides } from "$lib/features/songs/slides";
   import { platform, type MediaFile, type OutputContent } from "$lib/platform";
   import {
@@ -35,7 +38,7 @@
     onerror: (message: Message) => void;
   } = $props();
 
-  const ICONS = { song: "♪", image: "🖼", video: "🎬", pdf: "📄", presentation: "📊", pause: "⏱" } as const;
+  const ICONS = { song: "♪", image: "🖼", video: "🎬", pdf: "📄", presentation: "📊", pause: "⏱", scripture: "📖" } as const;
   const PAUSE_PRESETS = [5, 10, 15, 20, 30];
   const MAX_MINUTES = 600;
 
@@ -50,8 +53,14 @@
   let showPast = $state(false);
 
   /** Qué se está añadiendo o editando debajo de la lista. */
-  let adding = $state<"song" | null>(null);
+  let adding = $state<"song" | "scripture" | null>(null);
   let songFilter = $state("");
+  /** La lista de citas que se está escribiendo o pegando, y con qué versión se mostrarán ("" = la de la consola). */
+  let scriptureText = $state("");
+  let scriptureBible = $state("");
+  let addingScripture = $state(false);
+  let scriptureLines = $derived(parseList(scriptureText, bookLanguage(currentBibles().bible)));
+  let scriptureReady = $derived(scriptureLines.filter((l) => l.reference !== null).length);
   /** Pausa en el formulario: nueva (sin id en el plan) o una que se edita. */
   let pauseDraft = $state<{ id: string; title: string; minutes: number; seconds: number; background: string | null; isNew: boolean } | null>(null);
   /** Sección cuyo título se está escribiendo. */
@@ -99,6 +108,7 @@
   /** Lo que impide mostrar un elemento: la letra se borró o el archivo ya no está. */
   function problem(item: PlanItem): string | null {
     if (item.kind === "song" && !songOf(item)) return t("plans.songDeleted");
+    if (item.kind === "scripture" && !bibles.loading && missingIn(item, bibleFor(item))) return t("plans.notInBible");
     if (item.kind === "media" && missingFiles.has(item.path)) return t("plans.fileMissing");
     return null;
   }
@@ -109,6 +119,7 @@
       case "song": return songOf(item)?.title ?? t("plans.song");
       case "media": return baseName(item.path);
       case "pause": return item.title || t("plans.pause");
+      case "scripture": return referenceLabel(item, bibleFor(item));
     }
   }
 
@@ -119,6 +130,12 @@
         return song ? [song.singer, t("text.count", { count: splitSlides(song.body).length })].filter(Boolean).join(" · ") : "";
       }
       case "media": return t(`kind.${item.media}`);
+      case "scripture": {
+        const bible = bibleFor(item);
+        if (!bible) return t("plans.verses");
+        const fixed = item.bible && bible.id === item.bible;
+        return `${t("plans.verses")} · ${fixed ? bible.abbreviation : t("plans.consoleVersion", { version: bible.abbreviation })}`;
+      }
       case "pause": {
         const bg = item.background && !missingFiles.has(item.background) ? ` · ${baseName(item.background)}` : "";
         return `${t("plans.pause")} · ${formatCountdown(item.durationMs)}${bg}`;
@@ -129,7 +146,7 @@
 
   function icon(item: PlanItem): string {
     if (item.kind === "media") return ICONS[item.media];
-    if (item.kind === "song" || item.kind === "pause") return ICONS[item.kind];
+    if (item.kind === "song" || item.kind === "pause" || item.kind === "scripture") return ICONS[item.kind];
     return "";
   }
 
@@ -137,6 +154,7 @@
   async function contentOf(item: PlanItem): Promise<OutputContent | null> {
     switch (item.kind) {
       case "section": return null;
+      case "scripture": return scriptureContent(item);
       case "song": {
         const song = songOf(item);
         return song ? songContent(song) : null;
@@ -172,6 +190,10 @@
     if (item.kind === "section" || problem(item)) return;
     try {
       const content = await contentOf(item);
+      if (!content && item.kind === "scripture") {
+        onerror({ key: "plans.verseNotFound", params: { reference: title(item) } });
+        return;
+      }
       if (!content || content.kind === "empty") return;
       current = { id: item.id, content };
       if (send) onsend(content);
@@ -265,6 +287,38 @@
       onerror(toMessage(e));
     } finally {
       copying = false;
+    }
+  }
+
+  /** Añade las citas reconocidas. Las que la versión no tiene (Juan 3:99) no entran y se avisa. */
+  async function addScripture() {
+    if (!plan) return;
+    addingScripture = true;
+    try {
+      const bible = scriptureBible || null;
+      const found: ScriptureItem[] = [];
+      const notFound: string[] = [];
+      for (const line of scriptureLines) {
+        if (!line.reference) continue;
+        const { book, chapter, verseStart, verseEnd } = line.reference;
+        const item: ScriptureItem = { id: crypto.randomUUID(), kind: "scripture", book, chapter, verseStart, verseEnd, bible };
+        const ok = await scriptureContent(item).catch(() => null);
+        if (ok) found.push(item);
+        else notFound.push(line.text);
+      }
+      const target = openPlan.plan;
+      if (target && found.length > 0) savePlan({ ...target, items: [...target.items, ...found] });
+      if (notFound.length > 0) {
+        onerror({ key: "plans.versesNotFound", params: { list: notFound.join("; ") } });
+        // Quedan escritas las que no entraron, para corregirlas.
+        scriptureText = notFound.join("\n");
+      } else {
+        scriptureText = "";
+        adding = null;
+      }
+      if (found.length > 0) notify(t("plans.addedVerses", { count: found.length }));
+    } finally {
+      addingScripture = false;
     }
   }
 
@@ -518,6 +572,42 @@
           <button type="submit" class="btn primary" disabled={draftMs === 0}>{t(pauseDraft.isNew ? "plans.add" : "songs.save")}</button>
         </div>
       </form>
+    {:else if adding === "scripture"}
+      <form class="box" onsubmit={(e) => { e.preventDefault(); addScripture(); }}>
+        <strong>{t("plans.addVerses")}</strong>
+        <label class="field-row">
+          <span class="label">{t("plans.versesLabel")}</span>
+          <!-- svelte-ignore a11y_autofocus -->
+          <textarea class="field" rows="3" bind:value={scriptureText} placeholder={t("plans.versesPlaceholder")} autofocus></textarea>
+        </label>
+        {#if scriptureLines.length > 0}
+          <ul class="refs">
+            {#each scriptureLines as line, i (i)}
+              <li class:bad={!line.reference}>
+                {#if line.reference}
+                  ✓ {referenceLabel({ id: "", kind: "scripture", ...line.reference, bible: scriptureBible || null }, bibles.all.find((b) => b.id === scriptureBible) ?? currentBibles().bible)}
+                {:else}
+                  ✕ {line.text} <span class="small">— {t("plans.notUnderstood")}</span>
+                {/if}
+              </li>
+            {/each}
+          </ul>
+        {/if}
+        <label class="field-row">
+          <span class="label">{t("plans.version")}</span>
+          <select class="field" bind:value={scriptureBible}>
+            <option value="">{t("plans.versionConsole", { version: currentBibles().bible?.abbreviation ?? "" })}</option>
+            {#each visibleBibles() as b (b.id)}
+              <option value={b.id}>{b.abbreviation} · {b.name}</option>
+            {/each}
+          </select>
+        </label>
+        <p class="muted small">{t("plans.versesHint")}</p>
+        <div class="row end">
+          <button type="button" class="btn ghost" onclick={() => (adding = null)}>{t("songs.cancel")}</button>
+          <button type="submit" class="btn primary" disabled={scriptureReady === 0 || addingScripture}>{t("plans.addCount", { count: scriptureReady })}</button>
+        </div>
+      </form>
     {:else if adding === "song"}
       <div class="box">
         <div class="row">
@@ -547,6 +637,7 @@
         <span class="muted small">{t("plans.addLabel")}</span>
         <button class="btn" onclick={addSection}>+ {t("plans.section")}</button>
         <button class="btn" onclick={() => { adding = "song"; songFilter = ""; }}>+ {t("plans.song")}</button>
+        <button class="btn" onclick={() => (adding = "scripture")}>+ {t("plans.verses")}</button>
         <button class="btn" onclick={addMedia} disabled={copying}>{copying ? t("plans.copying") : `+ ${t("plans.media")}`}</button>
         <div class="pause-add">
           <button class="btn" onclick={() => newPause(10)}>+ {t("plans.pause")}</button>
@@ -592,6 +683,11 @@
     background: var(--surface-2);
   }
   .pause-add { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .refs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-weight: 600; color: var(--accent); }
+  .refs li { border: 0; display: block; }
+  .refs li:hover { background: transparent; }
+  .refs li.bad { color: var(--live); font-weight: 400; }
+  .box textarea { resize: vertical; font-size: 15px; }
   .chip {
     min-height: 32px;
     padding: 0 10px;
