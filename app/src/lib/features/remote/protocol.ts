@@ -9,7 +9,9 @@ export type RemoteCommand =
   | { type: "clear" }
   | { type: "scripture"; book: number; chapter: number; verse: number }
   | { type: "setBible"; id: string }
-  | { type: "show"; key: string };
+  | { type: "show"; key: string }
+  /** Un elemento del plan abierto en la consola, por su id. */
+  | { type: "planItem"; id: string };
 
 /** Algo que se puede volver a poner en pantalla desde el teléfono: lo preparado en la consola o lo reciente. */
 export interface RemoteItem {
@@ -19,6 +21,28 @@ export interface RemoteItem {
   /** Lo preparado en la consola (aún no enviado). */
   prepared: boolean;
 }
+
+/** El plan abierto en la consola, para tenerlo a un toque (D-019). */
+export interface RemotePlan {
+  name: string;
+  items: RemotePlanItem[];
+}
+
+export type RemotePlanItem =
+  | { kind: "section"; id: string; title: string }
+  | {
+      kind: "item";
+      id: string;
+      icon: string;
+      title: string;
+      detail: string;
+      /** false si no se puede mostrar (letra borrada, archivo que no está…). */
+      available: boolean;
+      /** Ya pasó por la pantalla en este culto. */
+      shown: boolean;
+      /** Es lo último preparado o mostrado desde el plan. */
+      current: boolean;
+    };
 
 /** Lo que está en pantalla, contado para el teléfono. */
 export type RemoteLive =
@@ -43,6 +67,8 @@ export interface RemoteStatus {
   confirmSend: boolean;
   /** Lo preparado y lo que estuvo en pantalla hace poco, lo más reciente primero (sin lo que está ahora). */
   items: RemoteItem[];
+  /** El plan abierto en la consola; null si no hay. */
+  plan: RemotePlan | null;
   /** Las versiones que se pueden elegir. */
   bibles: { id: string; abbreviation: string; name: string }[];
   /** La Biblia elegida en la consola: el teléfono busca en ella. */

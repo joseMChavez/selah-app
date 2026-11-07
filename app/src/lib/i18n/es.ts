@@ -503,6 +503,7 @@ const es = {
   "plans.notInBible": "Esta versión no tiene ese libro o capítulo",
   "plans.verseNotFound": "La versión elegida no tiene {reference}",
   "plans.versesNotFound": "No se añadieron porque la versión no las tiene: {list}",
+  "remote.plan": "Plan · {name}",
 };
 
 export type MessageKey = keyof typeof es;

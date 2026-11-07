@@ -504,6 +504,7 @@ const en: Record<MessageKey, string> = {
   "plans.notInBible": "This version does not have that book or chapter",
   "plans.verseNotFound": "The chosen version does not have {reference}",
   "plans.versesNotFound": "Not added because the version does not have them: {list}",
+  "remote.plan": "Plan · {name}",
 };
 
 export default en;

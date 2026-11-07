@@ -2,15 +2,14 @@
   // Plan: lo que se va a presentar en un culto, preparado de antemano y en orden (D-019).
   // Sin plan abierto se ven todos los planes; con uno abierto, se edita y se usa en el mismo sitio:
   // un clic prepara el elemento, doble clic lo envía a pantalla, «Siguiente» prepara el que sigue.
+  import { untrack } from "svelte";
   import { t, i18n } from "$lib/i18n/index.svelte";
   import { toMessage, type Message } from "$lib/core/messages";
-  import { formatCountdown, preparedTimer } from "$lib/features/clock/clock";
-  import { screenKey } from "$lib/features/output/history.svelte";
-  import { library, songContent } from "$lib/features/songs/library.svelte";
+  import { library } from "$lib/features/songs/library.svelte";
   import { bibles, currentBibles, visibleBibles } from "$lib/features/bible/bibles.svelte";
   import { bookLanguage } from "$lib/features/bible/scripture";
-  import { bibleFor, missingIn, parseList, referenceLabel, scriptureContent, type ScriptureItem } from "./scripture";
-  import { splitSlides } from "$lib/features/songs/slides";
+  import { parseList, referenceLabel, scriptureContent, type ScriptureItem } from "./scripture";
+  import { baseName, contentOf, detail, icon, markShown, problem, session, title } from "./items.svelte";
   import { platform, type MediaFile, type OutputContent } from "$lib/platform";
   import {
     choosePlan,
@@ -38,17 +37,12 @@
     onerror: (message: Message) => void;
   } = $props();
 
-  const ICONS = { song: "♪", image: "🖼", video: "🎬", pdf: "📄", presentation: "📊", pause: "⏱", scripture: "📖" } as const;
   const PAUSE_PRESETS = [5, 10, 15, 20, 30];
   const MAX_MINUTES = 600;
 
   type Pause = Extract<PlanItem, { kind: "pause" }>;
 
   let plan = $derived(openPlan.plan);
-  /** Elemento preparado desde el plan, y lo que se preparó con él (para saber cuándo llega a la pantalla). */
-  let current = $state<{ id: string; content: OutputContent } | null>(null);
-  /** Elementos que ya pasaron por la pantalla en esta sesión, por plan. */
-  let shown = $state<Record<string, string[]>>({});
   let confirmDelete = $state<string | null>(null);
   let showPast = $state(false);
 
@@ -66,9 +60,6 @@
   /** Sección cuyo título se está escribiendo. */
   let editingSection = $state<string | null>(null);
 
-  /** Presentación → PDF ya convertido, para no volver a pedirlo. */
-  const converted = new Map<string, string>();
-  let converting = $state<string | null>(null);
   /** Copiando medios elegidos a la carpeta de la app. */
   let copying = $state(false);
   /** Aviso breve tras añadir algo («Admirable» añadida al plan). */
@@ -97,95 +88,6 @@
     return new Date(y, m - 1, d).toLocaleDateString(i18n.locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   }
 
-  function baseName(path: string): string {
-    return path.split(/[\\/]/).pop() ?? path;
-  }
-
-  function songOf(item: PlanItem) {
-    return item.kind === "song" ? library.songs.find((s) => s.id === item.songId) : undefined;
-  }
-
-  /** Lo que impide mostrar un elemento: la letra se borró o el archivo ya no está. */
-  function problem(item: PlanItem): string | null {
-    if (item.kind === "song" && !songOf(item)) return t("plans.songDeleted");
-    if (item.kind === "scripture" && !bibles.loading && missingIn(item, bibleFor(item))) return t("plans.notInBible");
-    if (item.kind === "media" && missingFiles.has(item.path)) return t("plans.fileMissing");
-    return null;
-  }
-
-  function title(item: PlanItem): string {
-    switch (item.kind) {
-      case "section": return item.title;
-      case "song": return songOf(item)?.title ?? t("plans.song");
-      case "media": return baseName(item.path);
-      case "pause": return item.title || t("plans.pause");
-      case "scripture": return referenceLabel(item, bibleFor(item));
-    }
-  }
-
-  function detail(item: PlanItem): string {
-    switch (item.kind) {
-      case "song": {
-        const song = songOf(item);
-        return song ? [song.singer, t("text.count", { count: splitSlides(song.body).length })].filter(Boolean).join(" · ") : "";
-      }
-      case "media": return t(`kind.${item.media}`);
-      case "scripture": {
-        const bible = bibleFor(item);
-        if (!bible) return t("plans.verses");
-        const fixed = item.bible && bible.id === item.bible;
-        return `${t("plans.verses")} · ${fixed ? bible.abbreviation : t("plans.consoleVersion", { version: bible.abbreviation })}`;
-      }
-      case "pause": {
-        const bg = item.background && !missingFiles.has(item.background) ? ` · ${baseName(item.background)}` : "";
-        return `${t("plans.pause")} · ${formatCountdown(item.durationMs)}${bg}`;
-      }
-      default: return "";
-    }
-  }
-
-  function icon(item: PlanItem): string {
-    if (item.kind === "media") return ICONS[item.media];
-    if (item.kind === "song" || item.kind === "pause" || item.kind === "scripture") return ICONS[item.kind];
-    return "";
-  }
-
-  /** El contenido de un elemento para «Preparado»; null si no se puede mostrar. */
-  async function contentOf(item: PlanItem): Promise<OutputContent | null> {
-    switch (item.kind) {
-      case "section": return null;
-      case "scripture": return scriptureContent(item);
-      case "song": {
-        const song = songOf(item);
-        return song ? songContent(song) : null;
-      }
-      case "pause": {
-        const background = item.background && !missingFiles.has(item.background) ? item.background : null;
-        return preparedTimer(item.durationMs, item.title, background);
-      }
-      case "media":
-        switch (item.media) {
-          case "image": return { kind: "image", path: item.path };
-          case "video": return { kind: "video", path: item.path, paused: false };
-          case "pdf": return { kind: "pdf", path: item.path, page: 1 };
-          case "presentation": {
-            // Una presentación se muestra como el PDF que hace de ella PowerPoint, Keynote o LibreOffice.
-            let pdf = converted.get(item.path);
-            if (!pdf) {
-              converting = item.id;
-              try {
-                pdf = await platform.convertPresentation(item.path);
-                converted.set(item.path, pdf);
-              } finally {
-                converting = null;
-              }
-            }
-            return { kind: "pdf", path: pdf, page: 1 };
-          }
-        }
-    }
-  }
-
   async function prepareItem(item: PlanItem, send = false) {
     if (item.kind === "section" || problem(item)) return;
     try {
@@ -195,7 +97,7 @@
         return;
       }
       if (!content || content.kind === "empty") return;
-      current = { id: item.id, content };
+      session.current = { id: item.id, content };
       if (send) onsend(content);
       else onprepare(content);
     } catch (e) {
@@ -205,7 +107,8 @@
 
   /** Prepara el siguiente elemento que se pueda mostrar. */
   function prepareNext() {
-    const start = current ? presentable.findIndex((i) => i.id === current!.id) + 1 : 0;
+    const current = session.current;
+    const start = current ? presentable.findIndex((i) => i.id === current.id) + 1 : 0;
     const next = presentable.slice(start).find((i) => !problem(i));
     if (next) prepareItem(next);
   }
@@ -213,14 +116,8 @@
   // Cuando lo preparado desde el plan llega a la pantalla, se marca como mostrado.
   $effect(() => {
     const onScreen = live;
-    if (!current || !plan) return;
-    const c = current.content;
-    const same =
-      c.kind === "timer"
-        ? onScreen.kind === "timer" && onScreen.label === c.label && onScreen.durationMs === c.durationMs
-        : screenKey(onScreen) !== null && screenKey(onScreen) === screenKey(c);
-    const done = shown[plan.id] ?? [];
-    if (same && !done.includes(current.id)) shown[plan.id] = [...done, current.id];
+    const id = plan?.id;
+    if (id) untrack(() => markShown(id, onScreen));
   });
 
   // --- Editar el plan ---
@@ -377,12 +274,12 @@
 
   function newPlan() {
     createPlan(t("plans.untitled"), today());
-    current = null;
+    session.current = null;
   }
 
   function open(id: string) {
     choosePlan(id);
-    current = null;
+    session.current = null;
     adding = null;
     pauseDraft = null;
     confirmDelete = null;
@@ -482,7 +379,7 @@
       <ol class="items">
         {#each plan.items as item, i (item.id)}
           {@const issue = problem(item)}
-          {@const done = (shown[plan.id] ?? []).includes(item.id)}
+          {@const done = (session.shown[plan.id] ?? []).includes(item.id)}
           {#if item.kind === "section"}
             <li class="section">
               {#if editingSection === item.id}
@@ -507,7 +404,7 @@
               <button class="icon-btn remove" onclick={() => removeItem(item.id)} aria-label={t("plans.remove", { name: item.title })}>✕</button>
             </li>
           {:else}
-            <li class:chosen={current?.id === item.id} class:broken={issue !== null}>
+            <li class:chosen={session.current?.id === item.id} class:broken={issue !== null}>
               <button
                 class="item"
                 onclick={() => prepareItem(item)}
@@ -519,7 +416,7 @@
                 <span class="name">
                   {title(item)}
                   <span class="small sub" class:muted={!issue}>
-                    {#if converting === item.id}{t("media.converting")}{:else}{issue ?? detail(item)}{/if}
+                    {#if session.converting === item.id}{t("media.converting")}{:else}{issue ?? detail(item)}{/if}
                   </span>
                 </span>
                 {#if done}<span class="done" title={t("plans.shown")} aria-label={t("plans.shown")}>✓</span>{/if}

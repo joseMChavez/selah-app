@@ -21,6 +21,8 @@ pub enum Command {
     SetBible { id: String },
     /// Volver a mostrar algo de la lista «Para mostrar» (lo preparado o lo reciente), por su clave.
     Show { key: String },
+    /// Mostrar un elemento del plan abierto en la consola, por su id (D-019).
+    PlanItem { id: String },
 }
 
 /// Más largo que esto no es un id ni una clave de la consola.
@@ -41,6 +43,7 @@ impl Command {
             }
             Command::SetBible { id } => !id.is_empty() && id.len() <= MAX_TEXT,
             Command::Show { key } => !key.is_empty() && key.len() <= MAX_TEXT,
+            Command::PlanItem { id } => !id.is_empty() && id.len() <= MAX_TEXT,
             _ => true,
         }
     }
@@ -104,6 +107,8 @@ mod tests {
     fn versiones_y_lista() {
         assert_eq!(Command::parse(r#"{"type":"setBible","id":"SpanishLBLABible"}"#), Some(Command::SetBible { id: "SpanishLBLABible".into() }));
         assert_eq!(Command::parse(r#"{"type":"show","key":"pdf:/a.pdf"}"#), Some(Command::Show { key: "pdf:/a.pdf".into() }));
+        assert_eq!(Command::parse(r#"{"type":"planItem","id":"abc"}"#), Some(Command::PlanItem { id: "abc".into() }));
+        assert_eq!(Command::parse(r#"{"type":"planItem","id":""}"#), None);
         assert_eq!(Command::parse(r#"{"type":"setBible","id":""}"#), None);
         assert_eq!(Command::parse(&format!(r#"{{"type":"show","key":"{}"}}"#, "x".repeat(600))), None);
     }

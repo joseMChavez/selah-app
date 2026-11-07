@@ -504,6 +504,7 @@ const it: Record<MessageKey, string> = {
   "plans.notInBible": "Questa versione non ha quel libro o capitolo",
   "plans.verseNotFound": "La versione scelta non ha {reference}",
   "plans.versesNotFound": "Non aggiunti perché la versione non li ha: {list}",
+  "remote.plan": "Piano · {name}",
 };
 
 export default it;
