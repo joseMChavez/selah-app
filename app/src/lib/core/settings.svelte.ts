@@ -17,6 +17,8 @@ const SCHEMA = {
   tab: { initial: "bible", valid: isString },
   view: { initial: "projection" as "projection" | "stream", valid: (v: unknown) => v === "projection" || v === "stream" },
   expanded: { initial: false, valid: isBoolean },
+  /** Plan del culto abierto en la pestaña Plan; null = la lista de planes. */
+  plan: { initial: null as string | null, valid: isStringOrNull },
   /** null = el estilo inicial de la pantalla. */
   outputStyle: {
     initial: null as OutputStyle | null,
@@ -46,7 +48,7 @@ const KEYS = Object.keys(SCHEMA) as SettingKey[];
 
 /** Grupos que se pueden restablecer por separado en la vista de Ajustes. */
 export const SECTIONS = {
-  interface: ["locale", "theme", "tab", "view", "expanded"],
+  interface: ["locale", "theme", "tab", "view", "expanded", "plan"],
   projection: ["outputStyle", "confirmSend"],
   bible: ["bible", "bible2", "hiddenBibles"],
   stream: ["obsTextSource", "obsWaitMessage", "obsAutoConnect"],

@@ -6,7 +6,7 @@
   import SlideStrip from "$lib/features/output/SlideStrip.svelte";
   import StylePanel from "$lib/features/output/StylePanel.svelte";
   import StreamWorkspace from "$lib/features/stream/StreamWorkspace.svelte";
-  import { formatCountdown, newTimer, pauseTimer, resumeTimer } from "$lib/features/clock/clock";
+  import { formatCountdown, pauseTimer, resumeTimer, startTimer } from "$lib/features/clock/clock";
   import { deckPosition, moveDeck } from "$lib/features/output/deck";
   import { i18n, locales, setLocale, t, type Locale, type MessageKey } from "$lib/i18n/index.svelte";
   import { toMessage, type Message } from "$lib/core/messages";
@@ -70,7 +70,10 @@
       case "video": return t(content.paused ? "describe.videoPaused" : "describe.video", { name: baseName(content.path) });
       case "pdf": return t("describe.pdf", { name: baseName(content.path), n: content.page });
       case "clock": return t("describe.clock");
-      case "timer": return t(content.endsAt === null ? "describe.timerPaused" : "describe.timer", { time: formatCountdown(content.durationMs) });
+      case "timer": {
+        const timer = t(content.endsAt === null ? "describe.timerPaused" : "describe.timer", { time: formatCountdown(content.durationMs) });
+        return content.label ? `${timer} · ${content.label}` : timer;
+      }
     }
   }
 
@@ -173,7 +176,7 @@
     if (isTyping(document.activeElement)) (document.activeElement as HTMLElement).blur();
     if (!output.open && selectedIndex !== null) output = await platform.openOutput(selectedIndex);
     // Un temporizador preparado empieza a contar al llegar a la pantalla.
-    if (content.kind === "timer") content = newTimer(content.durationMs);
+    if (content.kind === "timer") content = startTimer(content);
     beforeBlack = null;
     output = await platform.setOutputContent(content);
   });
@@ -184,7 +187,7 @@
     const now = Date.now();
     switch (change) {
       case "toggle": return send(c.endsAt === null ? resumeTimer(c, now) : pauseTimer(c, now));
-      case "restart": return send(c.endsAt === null ? { ...c, remainingMs: c.durationMs } : newTimer(c.durationMs));
+      case "restart": return send(c.endsAt === null ? { ...c, remainingMs: c.durationMs } : startTimer(c, now));
       case "add":
         return send(c.endsAt === null ? { ...c, remainingMs: c.remainingMs + TIMER_STEP_MS } : { ...c, endsAt: c.endsAt + TIMER_STEP_MS });
     }

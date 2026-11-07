@@ -80,16 +80,16 @@
   });
 
   let clock = $derived.by(() => {
-    if (content.kind === "clock") return { text: formatClock(new Date(now), i18n.locale, content.hour12, content.seconds), expired: false };
+    if (content.kind === "clock") return { text: formatClock(new Date(now), i18n.locale, content.hour12, content.seconds), expired: false, label: "" };
     if (content.kind === "timer") {
       const remaining = timerRemaining(content, now);
-      return { text: formatCountdown(remaining), expired: remaining <= 0 };
+      return { text: formatCountdown(remaining), expired: remaining <= 0, label: content.label ?? "" };
     }
     return null;
   });
 
   // La imagen de fondo va detrás del texto, la Biblia y el reloj, y queda sola al quitar el contenido.
-  // Una letra puede traer la suya.
+  // Una letra o una cuenta atrás (la pausa de un plan) pueden traer la suya.
   // El logo va encima de todo menos de la pantalla en negro y del patrón de prueba.
   let logo = $derived(
     style.logo?.image && content.kind !== "black" && content.kind !== "testPattern" ? platform.mediaUrl(style.logo.image) : null,
@@ -97,7 +97,7 @@
 
   let backdrop = $derived.by(() => {
     if (!lyric && !clock && content.kind !== "empty") return null;
-    const path = (content.kind === "text" && content.background) || style.backgroundImage;
+    const path = ((content.kind === "text" || content.kind === "timer") && content.background) || style.backgroundImage;
     return path ? platform.mediaUrl(path) : null;
   });
 
@@ -186,8 +186,12 @@
     </div>
     {#if lyric.copyright}<p class="copyright">{lyric.copyright}</p>{/if}
   {:else if clock}
-    <!-- Tan grande como quepa a lo ancho: «10:45:30 p. m.» es mucho más largo que «5:00». -->
-    <p class="clock" style:font-size="min(30cqh, {Math.round(150 / clock.text.length)}cqw)">{clock.text}</p>
+    <!-- Sobre una imagen, la hora va en una placa oscura: tiene que leerse siempre, con cualquier fondo. -->
+    <div class="clock-box" class:plate={backdrop !== null}>
+      {#if clock.label}<p class="clock-label">{clock.label}</p>{/if}
+      <!-- Tan grande como quepa a lo ancho: «10:45:30 p. m.» es mucho más largo que «5:00». -->
+      <p class="clock" style:font-size="min({clock.label ? 24 : 30}cqh, {Math.round(130 / clock.text.length)}cqw)">{clock.text}</p>
+    </div>
   {:else if content.kind === "image"}
     <img {src} alt="" onerror={() => onerror?.(t("error.image", { name }))} />
   {:else if content.kind === "video"}
@@ -321,12 +325,44 @@
     letter-spacing: 0.02em;
     text-shadow: 0 0.03em 0.1em rgb(0 0 0 / 0.55);
   }
-  /* Tiempo cumplido: fondo rojo que late despacio, visible desde el púlpito. */
-  .view.expired { animation: expired 1.6s ease-in-out infinite alternate; }
-  .view.expired .backdrop, .view.expired .shade { display: none; }
+  .clock-box {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-width: 92cqw;
+  }
+  .clock-box.plate {
+    padding: 2cqh 4cqw;
+    border-radius: 3cqh;
+    background: rgb(0 0 0 / 0.55);
+  }
+  .clock-label {
+    position: relative;
+    margin: 0 0 1cqh;
+    max-width: 88cqw;
+    overflow: hidden;
+    font-size: 8cqh;
+    font-weight: 600;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-shadow: 0 0.04em 0.12em rgb(0 0 0 / 0.6);
+  }
+  /* Tiempo cumplido: un borde rojo que late despacio, visible desde el púlpito, sin tapar el fondo ni el logo.
+     La cuenta sigue con «−» y en rojo claro, que se lee sobre la placa oscura. */
+  .view.expired::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border: 2.2cqh solid #e0262e;
+    pointer-events: none;
+    animation: expired 1.6s ease-in-out infinite alternate;
+  }
+  .view.expired .clock { color: #ff8a8a; }
   @keyframes expired {
-    from { background-color: #b0151c; }
-    to { background-color: #e0262e; }
+    from { border-color: #9e1219; }
+    to { border-color: #ff3b42; }
   }
   img,
   video {

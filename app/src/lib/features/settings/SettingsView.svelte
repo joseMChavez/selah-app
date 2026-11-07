@@ -9,6 +9,7 @@
   import { DEFAULT_STYLE } from "$lib/features/output/OutputView.svelte";
   import { locales, setLocale, t, type Locale, type MessageKey } from "$lib/i18n/index.svelte";
   import { library, resetLibrary } from "$lib/features/songs/library.svelte";
+  import { plans, resetPlans } from "$lib/features/plans/plans.svelte";
   import { toMessage, type Message } from "$lib/core/messages";
   import { obs, waitMessage } from "$lib/features/stream/obs.svelte";
   import { loadOffice, office, removeOffice } from "$lib/features/presentations/office.svelte";
@@ -34,7 +35,7 @@
   ];
 
   /** Sección, o «bible:<id>» para quitar una versión concreta. */
-  type Section = keyof typeof SECTIONS | "songs" | "all" | "bibles" | "office" | `bible:${string}`;
+  type Section = keyof typeof SECTIONS | "songs" | "plans" | "all" | "bibles" | "office" | `bible:${string}`;
 
   let path = $state<string | null | undefined>(undefined);
   let waitDraft = $state(settings.obsWaitMessage);
@@ -91,6 +92,10 @@
     if (confirmed("songs")) run(resetLibrary, "songs");
   }
 
+  function removePlans() {
+    if (confirmed("plans")) run(resetPlans, "plans");
+  }
+
   function removeOfficeCopy() {
     if (confirmed("office")) run(removeOffice, "office");
   }
@@ -100,6 +105,7 @@
     run(async () => {
       await resetSettings();
       await resetLibrary();
+      await resetPlans();
       await platform.setOutputStyle(DEFAULT_STYLE);
     }, "all");
   }
@@ -201,11 +207,22 @@
 
   <section class="card">
     <h2>{t("settings.songs")}</h2>
-    <p>{t("settings.songsCount", { songs: library.songs.length, setlist: library.setlist.length })}</p>
+    <p>{t("settings.songsCount", { songs: library.songs.length })}</p>
     <div class="foot">
       {#if done === "songs"}<span class="ok small">{t("settings.restored")}</span>{/if}
-      <button class="btn" class:danger={confirming === "songs"} onclick={resetSongs} disabled={library.songs.length === 0 && library.setlist.length === 0}>
+      <button class="btn" class:danger={confirming === "songs"} onclick={resetSongs} disabled={library.songs.length === 0}>
         {confirming === "songs" ? t("settings.confirm") : t("settings.resetSongs")}
+      </button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>{t("settings.plans")}</h2>
+    <p>{t("settings.plansCount", { count: plans.all.length })}</p>
+    <div class="foot">
+      {#if done === "plans"}<span class="ok small">{t("settings.restored")}</span>{/if}
+      <button class="btn" class:danger={confirming === "plans"} onclick={removePlans} disabled={plans.all.length === 0}>
+        {confirming === "plans" ? t("settings.confirm") : t("settings.resetPlans")}
       </button>
     </div>
   </section>

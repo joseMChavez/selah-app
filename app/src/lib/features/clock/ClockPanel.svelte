@@ -3,6 +3,7 @@
   // El temporizador se prepara parado; empieza a contar al enviarlo a pantalla.
   import { t } from "$lib/i18n/index.svelte";
   import type { OutputContent } from "$lib/platform";
+  import { preparedTimer } from "./clock";
 
   let { onprepare }: { onprepare: (content: OutputContent) => void } = $props();
 
@@ -14,6 +15,8 @@
   let seconds = $state(false);
   let minutes = $state(5);
   let secs = $state(0);
+  /** Título opcional sobre la cuenta («Receso»). */
+  let label = $state("");
 
   let durationMs = $derived(
     (Math.min(MAX_MINUTES, Math.max(0, Math.floor(minutes || 0))) * 60 + Math.min(59, Math.max(0, Math.floor(secs || 0)))) * 1000,
@@ -21,7 +24,7 @@
 
   function update() {
     if (mode === "clock") onprepare({ kind: "clock", hour12, seconds });
-    else onprepare(durationMs > 0 ? { kind: "timer", durationMs, endsAt: null, remainingMs: durationMs } : { kind: "empty" });
+    else onprepare(durationMs > 0 ? preparedTimer(durationMs, label.trim()) : { kind: "empty" });
   }
 
   function choose(m: "clock" | "timer") {
@@ -71,6 +74,10 @@
         <input class="field" type="number" min="0" max="59" bind:value={secs} oninput={update} />
       </label>
     </div>
+    <label class="title">
+      <span class="label">{t("clock.label")}</span>
+      <input class="field" bind:value={label} oninput={update} placeholder={t("clock.labelPlaceholder")} maxlength="60" />
+    </label>
     <p class="muted small">{t("clock.expiredHint")}</p>
     <button class="btn" onclick={update} disabled={durationMs === 0}>{t("clock.prepare")}</button>
   {/if}
@@ -98,4 +105,5 @@
   .duration .field { width: 6em; font-size: 20px; font-variant-numeric: tabular-nums; }
   .colon { font-size: 24px; font-weight: 700; padding-bottom: 8px; }
   .label { font-size: 13px; font-weight: 600; color: var(--muted); }
+  .title { display: flex; flex-direction: column; gap: 4px; width: min(100%, 22em); }
 </style>

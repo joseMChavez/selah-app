@@ -39,7 +39,16 @@ export type OutputContent =
     }
   | { kind: "clock"; hour12: boolean; seconds: boolean }
   /** En marcha si endsAt (ms desde 1970) tiene valor; en pausa, remainingMs guarda lo que queda. */
-  | { kind: "timer"; durationMs: number; endsAt: number | null; remainingMs: number };
+  | {
+      kind: "timer";
+      durationMs: number;
+      endsAt: number | null;
+      remainingMs: number;
+      /** Título sobre la cuenta («Receso»); vacío = solo la cuenta. */
+      label?: string;
+      /** Imagen o GIF propio de esta cuenta; tapa el fondo general. */
+      background?: string | null;
+    };
 
 export interface ScriptureVerse {
   reference: string;
@@ -223,7 +232,7 @@ export interface ImportPreview {
   /** Ya están con otra letra. */
   conflicts: ImportSong[];
   invalid: { title: string; reason: ImportInvalidReason }[];
-  /** Canciones que trae como lista del culto. */
+  /** Canciones que trae como lista del culto; al importar pueden formar un plan. */
   setlist: number;
 }
 
@@ -234,8 +243,26 @@ export interface ImportResult {
   replaced: number;
   skipped: number;
   invalid: number;
-  setlistAdded: number;
+  /** Letras del plan creado con la lista del archivo; 0 si no se creó. */
+  planSongs: number;
 }
+
+/** Un plan del culto: lo que se va a presentar, en orden (features/plans, D-019). */
+export interface Plan {
+  id: string;
+  name: string;
+  /** Día del culto, «AAAA-MM-DD»; null = sin fecha. */
+  date: string | null;
+  notes: string;
+  items: PlanItem[];
+}
+
+export type PlanItem = { id: string } & (
+  | { kind: "section"; title: string }
+  | { kind: "song"; songId: string }
+  | { kind: "media"; path: string; media: MediaKind }
+  | { kind: "pause"; title: string; durationMs: number; background?: string | null }
+);
 
 export interface OutputState {
   open: boolean;
@@ -312,10 +339,17 @@ export interface Platform {
   songsList(): Promise<Song[]>;
   songSave(song: Song): Promise<void>;
   songDelete(id: string): Promise<void>;
-  setlistGet(): Promise<string[]>;
-  setlistSet(ids: string[]): Promise<void>;
-  /** Borra la biblioteca de letras y la lista. */
+  /** Borra la biblioteca de letras (los planes las marcan como borradas). */
   songsReset(): Promise<void>;
+
+  // Planes del culto (features/plans)
+  /** Con fecha primero, del más próximo al más lejano; después los que no tienen fecha. */
+  plansList(): Promise<Plan[]>;
+  planSave(plan: Plan): Promise<void>;
+  planDelete(id: string): Promise<void>;
+  plansReset(): Promise<void>;
+  /** Vuelve a permitir los archivos del plan guardado; devuelve los que ya no están en este equipo. */
+  planAllowFiles(id: string): Promise<string[]>;
 
   // Control remoto desde el teléfono (features/remote)
   remoteInfo(): Promise<RemoteInfo>;
@@ -331,11 +365,11 @@ export interface Platform {
   // Importar y exportar letras (features/transfer)
   /** Elige un .selah o .hpls y devuelve la vista previa; null si se cancela. No guarda nada. */
   transferImportPick(title: string, filterName: string): Promise<ImportPreview | null>;
-  /** Guarda lo de la última vista previa. */
-  transferImportApply(onConflict: OnConflict, addToSetlist: boolean, importedSuffix: string): Promise<ImportResult>;
+  /** Guarda lo de la última vista previa. Con planName, la lista del archivo se guarda además como un plan. */
+  transferImportApply(onConflict: OnConflict, planName: string | null, importedSuffix: string): Promise<ImportResult>;
   transferImportCancel(): Promise<void>;
-  /** Guarda la biblioteca (o solo la lista) en un .selah; null si se cancela. */
-  transferExport(title: string, filterName: string, fileName: string, onlySetlist: boolean): Promise<{ path: string; songs: number } | null>;
+  /** Guarda la biblioteca (o solo las letras de un plan) en un .selah; null si se cancela. */
+  transferExport(title: string, filterName: string, fileName: string, planId: string | null): Promise<{ path: string; songs: number } | null>;
 
   // Transmisión con OBS
   obsDetect(): Promise<ObsDetection>;

@@ -19,6 +19,7 @@ pub fn run() {
         .plugin(features::presentations::plugin())
         .plugin(features::bible::plugin())
         .plugin(features::songs::plugin())
+        .plugin(features::plans::plugin())
         .plugin(features::settings::plugin())
         .plugin(features::obs::plugin())
         .plugin(features::transfer::plugin())

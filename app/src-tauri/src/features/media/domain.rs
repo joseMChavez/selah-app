@@ -1,7 +1,7 @@
 // Tipos de archivo que Selah sabe mostrar.
 use std::path::Path;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 pub const IMAGE_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png", "webp", "gif", "bmp", "svg", "avif"];
 pub const VIDEO_EXTENSIONS: &[&str] = &["mp4", "m4v", "mov", "webm", "mkv", "ogv"];
@@ -9,7 +9,7 @@ pub const PDF_EXTENSIONS: &[&str] = &["pdf"];
 /// Se convierten a PDF para mostrarlas (features/presentations).
 pub const PRESENTATION_EXTENSIONS: &[&str] = &["pptx", "ppt", "ppsx", "pps", "odp"];
 
-#[derive(Clone, Copy, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum MediaKind {
     Image,

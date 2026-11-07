@@ -47,11 +47,17 @@ pub enum OutputContent {
         seconds: bool,
     },
     /// Cuenta atrás. En marcha si ends_at (ms desde 1970) tiene valor; en pausa guarda lo que queda.
-    /// Al llegar a cero sigue contando el tiempo excedido con el fondo en rojo.
+    /// Al llegar a cero sigue contando el tiempo excedido con un borde rojo.
     Timer {
         duration_ms: u64,
         ends_at: Option<u64>,
         remaining_ms: i64,
+        /// Título sobre la cuenta («Receso», «Conferencia»); vacío = solo la cuenta.
+        #[serde(default)]
+        label: String,
+        /// Imagen o GIF propio de esta cuenta; tapa el fondo general.
+        #[serde(default)]
+        background: Option<String>,
     },
 }
 
@@ -192,7 +198,7 @@ impl OutputContent {
     pub fn media_path(&self) -> Option<&str> {
         match self {
             Self::Image { path } | Self::Video { path, .. } | Self::Pdf { path, .. } => Some(path),
-            Self::Text { background, .. } => background.as_deref(),
+            Self::Text { background, .. } | Self::Timer { background, .. } => background.as_deref(),
             _ => None,
         }
     }
@@ -230,7 +236,7 @@ mod tests {
     #[test]
     pub fn contenidos_de_la_interfaz() {
         for json in [
-            r#"{"kind":"timer","durationMs":60000,"endsAt":null,"remainingMs":60000}"#,
+            r#"{"kind":"timer","durationMs":60000,"endsAt":null,"remainingMs":60000,"label":"Receso","background":null}"#,
             r#"{"kind":"clock","hour12":true,"seconds":false}"#,
             r#"{"kind":"text","slides":["a"],"index":0,"credit":"c","background":null}"#,
             r#"{"kind":"scripture","verses":[{"reference":"Jn 3:16","text":"t","second":{"reference":"Jn 3:16","text":"t"}}],"index":0,"version":"V","copyright":"","second":{"version":"W","copyright":""}}"#,

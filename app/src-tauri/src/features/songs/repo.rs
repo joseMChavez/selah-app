@@ -1,4 +1,4 @@
-// Letras y lista del culto en la base.
+// Letras de la biblioteca en la base. Las listas para el culto son planes (features/plans).
 use rusqlite::{params, Connection};
 
 use super::domain::Song;
@@ -40,38 +40,16 @@ impl Store {
         upsert_song(&self.conn, song)
     }
 
+    /// Los planes que la usaban la muestran como borrada (features/plans).
     pub fn delete_song(&mut self, id: &str) -> rusqlite::Result<()> {
-        let tx = self.conn.transaction()?;
-        tx.execute("DELETE FROM setlist WHERE song_id = ?1", [id])?;
-        tx.execute("DELETE FROM songs WHERE id = ?1", [id])?;
-        tx.commit()
+        self.conn.execute("DELETE FROM songs WHERE id = ?1", [id])?;
+        Ok(())
     }
 
-    pub fn setlist(&self) -> rusqlite::Result<Vec<String>> {
-        let mut stmt = self.conn.prepare("SELECT song_id FROM setlist ORDER BY position")?;
-        let rows = stmt.query_map([], |row| row.get(0))?;
-        rows.collect()
-    }
-
-    /// Sustituye la lista entera. Los ids que no están en la biblioteca se descartan.
-    pub fn set_setlist(&mut self, ids: &[String]) -> rusqlite::Result<()> {
-        let tx = self.conn.transaction()?;
-        tx.execute("DELETE FROM setlist", [])?;
-        for (position, id) in ids.iter().enumerate() {
-            tx.execute(
-                "INSERT INTO setlist (position, song_id) SELECT ?1, id FROM songs WHERE id = ?2",
-                params![position as i64, id],
-            )?;
-        }
-        tx.commit()
-    }
-
-    /// Borra la biblioteca de letras y la lista.
+    /// Borra la biblioteca de letras.
     pub fn reset_songs(&mut self) -> rusqlite::Result<()> {
-        let tx = self.conn.transaction()?;
-        tx.execute("DELETE FROM setlist", [])?;
-        tx.execute("DELETE FROM songs", [])?;
-        tx.commit()
+        self.conn.execute("DELETE FROM songs", [])?;
+        Ok(())
     }
 }
 
@@ -98,19 +76,17 @@ mod tests {
     }
 
     #[test]
-    fn letras_y_lista() {
+    fn letras() {
         let dir = temp_dir("letras");
         let mut store = Store::open(&dir);
         store.save_song(&song("b", "Bendito")).unwrap();
         store.save_song(&song("a", "Alabanza")).unwrap();
-        store.set_setlist(&["b".into(), "no-existe".into(), "a".into()]).unwrap();
-        assert_eq!(store.setlist().unwrap(), vec!["b", "a"]);
         assert_eq!(store.songs().unwrap()[0].title, "Alabanza");
 
         store.delete_song("b").unwrap();
-        assert_eq!(store.setlist().unwrap(), vec!["a"]);
+        assert_eq!(store.songs().unwrap().len(), 1);
         store.reset_songs().unwrap();
-        assert!(store.songs().unwrap().is_empty() && store.setlist().unwrap().is_empty());
+        assert!(store.songs().unwrap().is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

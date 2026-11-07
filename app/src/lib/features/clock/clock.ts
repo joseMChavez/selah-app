@@ -1,10 +1,16 @@
 // Reloj y temporizador. La salida los dibuja con su propio reloj: el backend solo guarda cuándo termina la cuenta.
 import type { OutputContent } from "$lib/platform";
 
-type Timer = Extract<OutputContent, { kind: "timer" }>;
+export type Timer = Extract<OutputContent, { kind: "timer" }>;
 
-export function newTimer(durationMs: number): Timer {
-  return { kind: "timer", durationMs, endsAt: Date.now() + durationMs, remainingMs: durationMs };
+/** Una cuenta preparada (parada), con su título y su fondo si los tiene. */
+export function preparedTimer(durationMs: number, label = "", background: string | null = null): Timer {
+  return { kind: "timer", durationMs, endsAt: null, remainingMs: durationMs, label, background };
+}
+
+/** La misma cuenta desde el principio y en marcha; conserva el título y el fondo. */
+export function startTimer(timer: Timer, now = Date.now()): Timer {
+  return { ...timer, endsAt: now + timer.durationMs, remainingMs: timer.durationMs };
 }
 
 /** Lo que queda; negativo cuando ya se pasó del tiempo. */

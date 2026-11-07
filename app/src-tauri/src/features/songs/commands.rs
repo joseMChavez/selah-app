@@ -20,16 +20,6 @@ pub fn song_delete(state: State<'_, Db>, id: String) -> Result<(), CommandError>
 }
 
 #[tauri::command]
-pub fn setlist_get(state: State<'_, Db>) -> Result<Vec<String>, CommandError> {
-    with_store(&state, |store| store.setlist())
-}
-
-#[tauri::command]
-pub fn setlist_set(state: State<'_, Db>, ids: Vec<String>) -> Result<(), CommandError> {
-    with_store(&state, |store| store.set_setlist(&ids))
-}
-
-#[tauri::command]
 pub fn songs_reset(state: State<'_, Db>) -> Result<(), CommandError> {
     with_store(&state, |store| store.reset_songs())
 }
