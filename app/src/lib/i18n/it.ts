@@ -483,6 +483,13 @@ const it: Record<MessageKey, string> = {
   "transfer.donePlan": "piano creato con {count} testi",
   "transfer.exportPlan": "Solo i testi di questo piano ({count})",
   "transfer.exportPlanPick": "Piano da esportare",
+  "plans.addedSong": "«{title}» aggiunto al piano «{plan}»",
+  "plans.addedMedia": "«{name}» aggiunto al piano (copiato nella cartella di Selah)",
+  "plans.addedMediaMany": "{count} file aggiunti al piano (copiati nella cartella di Selah)",
+  "plans.addedPause": "Pausa «{name}» aggiunta al piano",
+  "plans.copying": "Copia in corso…",
+  "settings.plansFiles": "I media dei piani sono salvati come copia nella cartella di Selah e occupano {size} MB. Le copie che nessun piano usa più vengono eliminate da sole.",
+  "error.copyFailed": "Impossibile copiare «{file}» nella cartella di Selah: {reason}",
 };
 
 export default it;

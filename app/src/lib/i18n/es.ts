@@ -482,6 +482,13 @@ const es = {
   "transfer.donePlan": "plan creado con {count} letras",
   "transfer.exportPlan": "Solo las letras de este plan ({count})",
   "transfer.exportPlanPick": "Plan que se exporta",
+  "plans.addedSong": "«{title}» añadida al plan «{plan}»",
+  "plans.addedMedia": "«{name}» añadido al plan (copiado en la carpeta de Selah)",
+  "plans.addedMediaMany": "{count} archivos añadidos al plan (copiados en la carpeta de Selah)",
+  "plans.addedPause": "Pausa «{name}» añadida al plan",
+  "plans.copying": "Copiando…",
+  "settings.plansFiles": "Los medios de los planes se guardan como copia en la carpeta de Selah y ocupan {size} MB. Las copias que ya no usa ningún plan se borran solas.",
+  "error.copyFailed": "No se pudo copiar «{file}» a la carpeta de Selah: {reason}",
 };
 
 export type MessageKey = keyof typeof es;

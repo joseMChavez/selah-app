@@ -7,7 +7,11 @@ import { platform, type Plan, type PlanItem } from "$lib/platform";
 
 export type { Plan, PlanItem };
 
-export const plans = $state({ all: [] as Plan[] });
+export const plans = $state({
+  all: [] as Plan[],
+  /** Lo que ocupan las copias de los medios de los planes, en bytes; null hasta saberlo. */
+  filesBytes: null as number | null,
+});
 
 /** Archivos del plan abierto que no están en este equipo (movidos, borrados, plan hecho en otra computadora). */
 export const missingFiles = new SvelteSet<string>();
@@ -56,6 +60,15 @@ async function checkFiles(id: string | null) {
   }
 }
 
+/** Borra las copias de medios que ya no usa ningún plan (al abrir Selah y al borrar planes). */
+export async function cleanFiles() {
+  try {
+    plans.filesBytes = await platform.plansCleanFiles();
+  } catch (e) {
+    failed("limpiar copias", e);
+  }
+}
+
 export async function loadPlans() {
   try {
     plans.all = await platform.plansList();
@@ -63,6 +76,7 @@ export async function loadPlans() {
   } catch (e) {
     failed("leer", e);
   }
+  cleanFiles();
 }
 
 export function choosePlan(id: string | null) {
@@ -103,7 +117,7 @@ export function duplicatePlan(plan: Plan, name: string) {
 export function deletePlan(id: string) {
   plans.all = plans.all.filter((p) => p.id !== id);
   if (settings.plan === id) choosePlan(null);
-  platform.planDelete(id).catch((e) => failed("borrar", e));
+  platform.planDelete(id).then(cleanFiles, (e) => failed("borrar", e));
 }
 
 /** Añade al final del plan abierto (desde otros paneles, como Textos). */
@@ -117,4 +131,5 @@ export async function resetPlans() {
   await platform.plansReset();
   plans.all = [];
   choosePlan(null);
+  await cleanFiles();
 }

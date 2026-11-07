@@ -2,6 +2,7 @@
 // Plugin interno «plans»: la interfaz llama a sus comandos como `plugin:plans|<comando>` (platform/tauri.ts).
 mod commands;
 pub mod domain;
+mod files;
 pub mod repo;
 
 use tauri::plugin::{Builder, TauriPlugin};
@@ -17,6 +18,9 @@ pub fn plugin() -> TauriPlugin<Wry> {
             commands::plan_delete,
             commands::plans_reset,
             commands::plan_allow_files,
+            commands::plan_pick_media,
+            commands::plan_pick_background,
+            commands::plans_clean_files,
         ])
         .build()
 }

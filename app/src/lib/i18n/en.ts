@@ -483,6 +483,13 @@ const en: Record<MessageKey, string> = {
   "transfer.donePlan": "plan created with {count} lyrics",
   "transfer.exportPlan": "Only this plan's lyrics ({count})",
   "transfer.exportPlanPick": "Plan to export",
+  "plans.addedSong": "“{title}” added to the plan “{plan}”",
+  "plans.addedMedia": "“{name}” added to the plan (copied into Selah's folder)",
+  "plans.addedMediaMany": "{count} files added to the plan (copied into Selah's folder)",
+  "plans.addedPause": "Break “{name}” added to the plan",
+  "plans.copying": "Copying…",
+  "settings.plansFiles": "Plan media is stored as a copy in Selah's folder and takes {size} MB. Copies no plan uses any more are deleted automatically.",
+  "error.copyFailed": "Could not copy “{file}” into Selah's folder: {reason}",
 };
 
 export default en;

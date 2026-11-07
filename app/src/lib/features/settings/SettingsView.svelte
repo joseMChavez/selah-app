@@ -219,6 +219,9 @@
   <section class="card">
     <h2>{t("settings.plans")}</h2>
     <p>{t("settings.plansCount", { count: plans.all.length })}</p>
+    {#if plans.filesBytes}
+      <p class="muted small">{t("settings.plansFiles", { size: (plans.filesBytes / 1048576).toFixed(1) })}</p>
+    {/if}
     <div class="foot">
       {#if done === "plans"}<span class="ok small">{t("settings.restored")}</span>{/if}
       <button class="btn" class:danger={confirming === "plans"} onclick={removePlans} disabled={plans.all.length === 0}>

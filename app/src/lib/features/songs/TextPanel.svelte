@@ -36,6 +36,9 @@
   let confirmDelete = $state<string | null>(null);
   /** Letras añadidas al plan abierto en esta visita, para confirmarlo en el botón. */
   let added = $state(new Set<string>());
+  /** Aviso breve tras añadir al plan. */
+  let notice = $state<string | null>(null);
+  let noticeTimer: ReturnType<typeof setTimeout> | undefined;
   let shown = $derived.by(() => {
     const q = filter.trim().toLocaleLowerCase();
     if (!q) return library.songs;
@@ -107,6 +110,9 @@
   function addToPlan(song: Song) {
     addToOpenPlan({ id: crypto.randomUUID(), kind: "song", songId: song.id });
     added = new Set([...added, song.id]);
+    notice = t("plans.addedSong", { title: song.title, plan: openPlan.plan?.name ?? "" });
+    clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(() => (notice = null), 3000);
   }
 
   // Al cambiar de plan, los botones vuelven a ofrecer «+ Plan».
@@ -182,6 +188,7 @@
       <button class="btn primary" onclick={startNew}>{t("songs.new")}</button>
       <input class="field search" bind:value={filter} placeholder={t("songs.search")} aria-label={t("songs.search")} />
     </div>
+    {#if notice}<p class="notice small" role="status">✓ {notice}</p>{/if}
     {#if library.songs.length === 0}
       <p class="muted">{t("songs.empty")}</p>
     {:else if shown.length === 0}
@@ -232,6 +239,14 @@
   .row.end { justify-content: flex-end; }
   .row .name { max-width: 14em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .actions { display: flex; gap: 8px; }
+  .notice {
+    margin: 0;
+    padding: 6px 10px;
+    border-radius: 8px;
+    color: var(--accent);
+    background: var(--accent-soft);
+    font-weight: 600;
+  }
   .search { flex: 1; min-width: 0; }
 
   .items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }

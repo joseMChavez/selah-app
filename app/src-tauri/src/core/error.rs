@@ -29,6 +29,8 @@ pub enum CommandError {
     /// El archivo de letras no se pudo leer (formato desconocido, dañado…).
     ImportFailed { file: String, reason: String },
     ExportFailed { reason: String },
+    /// No se pudo copiar un medio a la carpeta de la app (disco lleno, sin permiso…).
+    CopyFailed { file: String, reason: String },
     /// No se pudo encender el control remoto (puertos ocupados, permisos…).
     RemoteFailed { reason: String },
     /// No se pudo leer o escribir la base de datos local.

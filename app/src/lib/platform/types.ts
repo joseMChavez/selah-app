@@ -192,6 +192,7 @@ export type CommandError =
   | { code: "officeDownload"; message: string }
   | { code: "importFailed"; file: string; reason: string }
   | { code: "exportFailed"; reason: string }
+  | { code: "copyFailed"; file: string; reason: string }
   | { code: "remoteFailed"; reason: string }
   | { code: "internal"; message: string };
 
@@ -350,6 +351,12 @@ export interface Platform {
   plansReset(): Promise<void>;
   /** Vuelve a permitir los archivos del plan guardado; devuelve los que ya no están en este equipo. */
   planAllowFiles(id: string): Promise<string[]>;
+  /** Elige medios y los copia a la carpeta de la app; devuelve las copias, con el nombre original. [] si se cancela. */
+  planPickMedia(title: string, filterName: string): Promise<MediaFile[]>;
+  /** Elige el fondo de una pausa y lo copia a la carpeta de la app; null si se cancela. */
+  planPickBackground(title: string, filterName: string): Promise<string | null>;
+  /** Borra las copias que ya no usa ningún plan; devuelve lo que ocupan las que quedan, en bytes. */
+  plansCleanFiles(): Promise<number>;
 
   // Control remoto desde el teléfono (features/remote)
   remoteInfo(): Promise<RemoteInfo>;

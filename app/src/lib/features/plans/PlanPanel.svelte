@@ -60,6 +60,17 @@
   /** Presentación → PDF ya convertido, para no volver a pedirlo. */
   const converted = new Map<string, string>();
   let converting = $state<string | null>(null);
+  /** Copiando medios elegidos a la carpeta de la app. */
+  let copying = $state(false);
+  /** Aviso breve tras añadir algo («Admirable» añadida al plan). */
+  let notice = $state<string | null>(null);
+  let noticeTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function notify(text: string) {
+    notice = text;
+    clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(() => (notice = null), 3000);
+  }
 
   const now = today();
   let upcoming = $derived(plans.all.filter((p) => p.date === null || p.date >= now));
@@ -229,13 +240,18 @@
   }
 
   function addSong(songId: string) {
-    if (plan) setItems([...plan.items, { id: crypto.randomUUID(), kind: "song", songId }]);
+    if (!plan) return;
+    setItems([...plan.items, { id: crypto.randomUUID(), kind: "song", songId }]);
+    const song = library.songs.find((s) => s.id === songId);
+    notify(t("plans.addedSong", { title: song?.title ?? "", plan: plan.name }));
   }
 
   async function addMedia() {
     if (!plan) return;
+    copying = true;
     try {
-      const picked: MediaFile[] = await platform.pickMedia(t("dialog.title"), t("dialog.filter"));
+      // Se guardan copias en la carpeta de Selah: el plan sigue sirviendo aunque se mueva o borre el original.
+      const picked: MediaFile[] = await platform.planPickMedia(t("dialog.title"), t("dialog.filter"));
       // El plan pudo cambiar mientras el diálogo estaba abierto: se añade al que está abierto ahora.
       const target = openPlan.plan;
       if (!target || picked.length === 0) return;
@@ -244,8 +260,11 @@
         ...target,
         items: [...target.items, ...picked.map((f): PlanItem => ({ id: crypto.randomUUID(), kind: "media", path: f.path, media: f.kind }))],
       });
+      notify(picked.length === 1 ? t("plans.addedMedia", { name: picked[0].name }) : t("plans.addedMediaMany", { count: picked.length }));
     } catch (e) {
       onerror(toMessage(e));
+    } finally {
+      copying = false;
     }
   }
 
@@ -284,12 +303,13 @@
     };
     const exists = plan.items.some((i) => i.id === item.id);
     setItems(exists ? plan.items.map((i) => (i.id === item.id ? item : i)) : [...plan.items, item]);
+    if (!exists) notify(t("plans.addedPause", { name: item.title || t("plans.pause") }));
     pauseDraft = null;
   }
 
   async function pickPauseBackground() {
     try {
-      const path = await platform.pickBackground(t("background.dialogTitle"), t("background.dialogFilter"));
+      const path = await platform.planPickBackground(t("background.dialogTitle"), t("background.dialogFilter"));
       if (path && pauseDraft) {
         missingFiles.delete(path);
         pauseDraft.background = path;
@@ -462,6 +482,8 @@
       </ol>
     {/if}
 
+    {#if notice}<p class="notice small" role="status">✓ {notice}</p>{/if}
+
     {#if pauseDraft}
       <form class="box" onsubmit={(e) => { e.preventDefault(); savePause(); }}>
         <strong>{t(pauseDraft.isNew ? "plans.addPause" : "plans.editPause")}</strong>
@@ -525,7 +547,7 @@
         <span class="muted small">{t("plans.addLabel")}</span>
         <button class="btn" onclick={addSection}>+ {t("plans.section")}</button>
         <button class="btn" onclick={() => { adding = "song"; songFilter = ""; }}>+ {t("plans.song")}</button>
-        <button class="btn" onclick={addMedia}>+ {t("plans.media")}</button>
+        <button class="btn" onclick={addMedia} disabled={copying}>{copying ? t("plans.copying") : `+ ${t("plans.media")}`}</button>
         <div class="pause-add">
           <button class="btn" onclick={() => newPause(10)}>+ {t("plans.pause")}</button>
           {#each PAUSE_PRESETS as m (m)}
@@ -539,6 +561,14 @@
 
 <style>
   .plan-panel { display: flex; flex-direction: column; gap: 10px; }
+  .notice {
+    margin: 0;
+    padding: 6px 10px;
+    border-radius: 8px;
+    color: var(--accent);
+    background: var(--accent-soft);
+    font-weight: 600;
+  }
   .actions, .head, .add, .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .head { justify-content: space-between; }
   .meta { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
