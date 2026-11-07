@@ -7,7 +7,9 @@ import { lastSeen, recentScreens, screenKey } from "$lib/features/output/history
 import { toMessage, type Message } from "$lib/core/messages";
 import { setSetting, settings } from "$lib/core/settings.svelte";
 import { platform, type OutputContent, type OutputState, type RemoteInfo } from "$lib/platform";
-import type { RemoteItem, RemoteLive, RemoteStatus } from "./protocol";
+import { openPlan } from "$lib/features/plans/plans.svelte";
+import { detail, icon, problem, session, title } from "$lib/features/plans/items.svelte";
+import type { RemoteItem, RemoteLive, RemotePlan, RemoteStatus } from "./protocol";
 
 const MAX_ITEMS = 6;
 
@@ -79,6 +81,30 @@ function items(live: OutputContent, prepared: OutputContent, describe: (c: Outpu
   return list.slice(0, MAX_ITEMS);
 }
 
+/** El plan abierto, contado para el teléfono: el predicador tiene sus versículos y lo demás a un toque. */
+function planOf(): RemotePlan | null {
+  const plan = openPlan.plan;
+  if (!plan) return null;
+  const shown = session.shown[plan.id] ?? [];
+  return {
+    name: plan.name,
+    items: plan.items.map((item) =>
+      item.kind === "section"
+        ? { kind: "section", id: item.id, title: item.title }
+        : {
+            kind: "item",
+            id: item.id,
+            icon: icon(item),
+            title: title(item),
+            detail: problem(item) ?? detail(item),
+            available: problem(item) === null,
+            shown: shown.includes(item.id),
+            current: session.current?.id === item.id,
+          },
+    ),
+  };
+}
+
 function liveOf(content: OutputContent, description: string): RemoteLive {
   switch (content.kind) {
     case "empty":
@@ -115,6 +141,7 @@ export function remoteStatus(
     canUnblack,
     confirmSend: settings.confirmSend,
     items: items(output.content, prepared, describe),
+    plan: planOf(),
     bibles: visibleBibles().map((b) => ({ id: b.id, abbreviation: b.abbreviation, name: b.name })),
     bible: bible && { id: bible.id, abbreviation: bible.abbreviation, language: bookLanguage(bible), books: bible.books },
   };

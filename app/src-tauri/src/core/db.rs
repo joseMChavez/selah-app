@@ -1,5 +1,5 @@
 // Base de datos local (SQLite) compartida por las funcionalidades: cada una añade sus consultas con su propio
-// `impl Store` (features/settings/repo.rs, features/songs/repo.rs). Aquí solo se abre el archivo y se migra.
+// `impl Store` (features/settings/repo.rs, features/songs/repo.rs, features/plans/repo.rs). Aquí solo se abre el archivo y se migra.
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -30,6 +30,24 @@ const MIGRATIONS: &[&str] = &["
         position INTEGER PRIMARY KEY,
         song_id TEXT NOT NULL REFERENCES songs(id) ON DELETE CASCADE
     );
+", "
+    -- Planes del culto (D-019). Los elementos van juntos como JSON (features/plans/domain.rs): el plan se guarda entero.
+    CREATE TABLE plans (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        date TEXT,
+        notes TEXT NOT NULL DEFAULT '',
+        items TEXT NOT NULL DEFAULT '[]',
+        updated_at INTEGER NOT NULL
+    );
+    -- La lista del culto pasa a ser un plan, con sus letras en el mismo orden.
+    INSERT INTO plans (id, name, date, notes, items, updated_at)
+    SELECT 'lista', 'Lista', NULL, '',
+        json_group_array(json_object('id', song_id, 'kind', 'song', 'songId', song_id)),
+        CAST(strftime('%s', 'now') AS INTEGER)
+    FROM (SELECT song_id FROM setlist ORDER BY position)
+    HAVING COUNT(*) > 0;
+    DROP TABLE setlist;
 "];
 
 pub struct Store {

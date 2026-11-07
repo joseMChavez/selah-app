@@ -1,7 +1,17 @@
 <script lang="ts">
-  // Textos: una biblioteca de letras guardadas, la lista del culto y el texto libre de siempre.
+  // Textos: una biblioteca de letras guardadas y el texto libre de siempre. Lo que se presenta en un culto,
+  // en orden, va en un plan (features/plans).
   import { t } from "$lib/i18n/index.svelte";
-  import { deleteSong, library, saveSong, setSetlist, type Song } from "$lib/features/songs/library.svelte";
+  import { addToOpenPlan, openPlan } from "$lib/features/plans/plans.svelte";
+  import {
+    allowedBackgrounds,
+    allowSongBackgrounds,
+    deleteSong,
+    library,
+    saveSong,
+    songContent,
+    type Song,
+  } from "$lib/features/songs/library.svelte";
   import { toMessage, type Message } from "$lib/core/messages";
   import { platform, type OutputContent } from "$lib/platform";
   import { splitSlides } from "$lib/features/songs/slides";
@@ -14,9 +24,9 @@
     onerror: (message: Message) => void;
   } = $props();
 
-  type Mode = "setlist" | "library" | "free";
+  type Mode = "library" | "free";
 
-  let mode = $state<Mode>(library.setlist.length > 0 ? "setlist" : "library");
+  let mode = $state<Mode>("library");
   let draft = $state(t("text.sample"));
   let slides = $derived(splitSlides(draft));
   let filter = $state("");
@@ -24,10 +34,11 @@
   let editing = $state<Song | null>(null);
   let current = $state<string | null>(null);
   let confirmDelete = $state<string | null>(null);
-  /** Fondos que existen en este equipo; los demás se ignoran para no impedir mostrar la letra. */
-  let backgrounds = $state(new Set<string>());
-
-  let setlistSongs = $derived(library.setlist.map((id) => library.songs.find((s) => s.id === id)).filter((s) => s !== undefined));
+  /** Letras añadidas al plan abierto en esta visita, para confirmarlo en el botón. */
+  let added = $state(new Set<string>());
+  /** Aviso breve tras añadir al plan. */
+  let notice = $state<string | null>(null);
+  let noticeTimer: ReturnType<typeof setTimeout> | undefined;
   let shown = $derived.by(() => {
     const q = filter.trim().toLocaleLowerCase();
     if (!q) return library.songs;
@@ -35,25 +46,13 @@
   });
   let editingSlides = $derived(editing ? splitSlides(editing.body) : []);
 
-  const modes: { id: Mode; label: "songs.setlist" | "songs.library" | "songs.free" }[] = [
-    { id: "setlist", label: "songs.setlist" },
+  const modes: { id: Mode; label: "songs.library" | "songs.free" }[] = [
     { id: "library", label: "songs.library" },
     { id: "free", label: "songs.free" },
   ];
 
   function baseName(path: string): string {
     return path.split(/[\\/]/).pop() ?? path;
-  }
-
-  function credit(song: Song): string {
-    return [song.title, song.singer, song.writer && t("songs.writtenBy", { name: song.writer })].filter(Boolean).join(" · ");
-  }
-
-  function songContent(song: Song): OutputContent {
-    const slides = splitSlides(song.body);
-    if (slides.length === 0) return { kind: "empty" };
-    const background = song.background && backgrounds.has(song.background) ? song.background : null;
-    return { kind: "text", slides, index: 0, credit: credit(song), background };
   }
 
   function prepareSong(song: Song) {
@@ -89,7 +88,7 @@
     try {
       const path = await platform.pickBackground(t("background.dialogTitle"), t("background.dialogFilter"));
       if (path && editing) {
-        backgrounds = new Set([...backgrounds, path]);
+        allowedBackgrounds.add(path);
         editing.background = path;
         onprepare(songContent(editing));
       }
@@ -108,17 +107,19 @@
     confirmDelete = null;
   }
 
-  function toggleInSetlist(id: string) {
-    setSetlist(library.setlist.includes(id) ? library.setlist.filter((x) => x !== id) : [...library.setlist, id]);
+  function addToPlan(song: Song) {
+    addToOpenPlan({ id: crypto.randomUUID(), kind: "song", songId: song.id });
+    added = new Set([...added, song.id]);
+    notice = t("plans.addedSong", { title: song.title, plan: openPlan.plan?.name ?? "" });
+    clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(() => (notice = null), 3000);
   }
 
-  function move(i: number, delta: -1 | 1) {
-    const ids = [...library.setlist];
-    const j = i + delta;
-    if (j < 0 || j >= ids.length) return;
-    [ids[i], ids[j]] = [ids[j], ids[i]];
-    setSetlist(ids);
-  }
+  // Al cambiar de plan, los botones vuelven a ofrecer «+ Plan».
+  $effect(() => {
+    void openPlan.id;
+    added = new Set();
+  });
 
   function chooseMode(m: Mode) {
     mode = m;
@@ -126,14 +127,10 @@
     confirmDelete = null;
   }
 
-  // El permiso para leer los fondos no sobrevive a un reinicio de la app. Se pide al abrir y para cada fondo
-  // nuevo que llegue a la biblioteca (por ejemplo, al importar letras), una sola vez por ruta.
-  const requested = new Set<string>();
+  // Cada fondo nuevo que llega a la biblioteca (al abrir, al importar letras) se vuelve a permitir.
   $effect(() => {
-    const missing = [...new Set(library.songs.map((s) => s.background))].filter((p): p is string => p !== null && !requested.has(p));
-    if (missing.length === 0) return;
-    for (const p of missing) requested.add(p);
-    platform.allowBackgrounds(missing).then((ok) => (backgrounds = new Set([...backgrounds, ...ok]))).catch(() => {});
+    void library.songs;
+    allowSongBackgrounds();
   });
 </script>
 
@@ -142,7 +139,6 @@
     {#each modes as m (m.id)}
       <button role="tab" aria-selected={mode === m.id} onclick={() => chooseMode(m.id)}>
         {t(m.label)}
-        {#if m.id === "setlist" && library.setlist.length > 0}<span class="count">{library.setlist.length}</span>{/if}
       </button>
     {/each}
   </div>
@@ -187,31 +183,12 @@
         <button type="submit" class="btn primary" disabled={editingSlides.length === 0}>{t("songs.save")}</button>
       </div>
     </form>
-  {:else if mode === "setlist"}
-    {#if setlistSongs.length === 0}
-      <p class="muted">{t("songs.setlistEmpty")}</p>
-    {:else}
-      <p class="muted small">{t("songs.setlistHint")}</p>
-      <ol class="items">
-        {#each setlistSongs as song, i (song.id)}
-          <li class:chosen={song.id === current}>
-            <button class="item" onclick={() => prepareSong(song)}>
-              <span class="num">{i + 1}</span>
-              <span class="name">{song.title}<span class="muted small sub">{song.singer}</span></span>
-            </button>
-            <button class="icon-btn" onclick={() => move(i, -1)} disabled={i === 0} aria-label={t("songs.moveUp")}>▲</button>
-            <button class="icon-btn" onclick={() => move(i, 1)} disabled={i === setlistSongs.length - 1} aria-label={t("songs.moveDown")}>▼</button>
-            <button class="icon-btn remove" onclick={() => toggleInSetlist(song.id)} aria-label={t("songs.removeFromSetlist", { title: song.title })}>✕</button>
-          </li>
-        {/each}
-      </ol>
-      <button class="btn ghost clear" onclick={() => setSetlist([])}>{t("songs.clearSetlist")}</button>
-    {/if}
   {:else if mode === "library"}
     <div class="actions">
       <button class="btn primary" onclick={startNew}>{t("songs.new")}</button>
       <input class="field search" bind:value={filter} placeholder={t("songs.search")} aria-label={t("songs.search")} />
     </div>
+    {#if notice}<p class="notice small" role="status">✓ {notice}</p>{/if}
     {#if library.songs.length === 0}
       <p class="muted">{t("songs.empty")}</p>
     {:else if shown.length === 0}
@@ -219,7 +196,6 @@
     {:else}
       <ul class="items">
         {#each shown as song (song.id)}
-          {@const inSetlist = library.setlist.includes(song.id)}
           <li class:chosen={song.id === current}>
             <button class="item" onclick={() => prepareSong(song)}>
               <span class="name">
@@ -227,9 +203,11 @@
                 <span class="muted small sub">{[song.singer, t("text.count", { count: splitSlides(song.body).length })].filter(Boolean).join(" · ")}</span>
               </span>
             </button>
-            <button class="btn ghost small-btn" class:on={inSetlist} onclick={() => toggleInSetlist(song.id)}>
-              {inSetlist ? t("songs.inSetlist") : t("songs.addToSetlist")}
-            </button>
+            {#if openPlan.id}
+              <button class="btn ghost small-btn" class:on={added.has(song.id)} onclick={() => addToPlan(song)} title={t("songs.addToPlanHint")}>
+                {added.has(song.id) ? t("songs.inPlan") : t("songs.addToPlan")}
+              </button>
+            {/if}
             <button class="btn ghost small-btn" onclick={() => startEdit(song)}>{t("songs.edit")}</button>
             <button class="icon-btn remove" class:confirm={confirmDelete === song.id} onclick={() => remove(song.id)} aria-label={t("songs.delete", { title: song.title })} title={t("songs.delete", { title: song.title })}>
               {confirmDelete === song.id ? t("songs.confirmDelete") : "✕"}
@@ -251,14 +229,6 @@
 <style>
   .text-panel { display: flex; flex-direction: column; gap: 10px; height: 100%; }
   .modes { align-self: flex-start; }
-  .count {
-    margin-left: 6px;
-    padding: 0 6px;
-    font-size: 12px;
-    border-radius: 999px;
-    /* Se lee igual en la pestaña elegida (texto claro) y en las demás. */
-    background: color-mix(in srgb, currentColor 18%, transparent);
-  }
   .label { font-size: 13px; font-weight: 600; color: var(--muted); }
   textarea { flex: 1; min-height: 220px; resize: vertical; font-size: 16px; line-height: 1.5; }
   .editor { display: flex; flex-direction: column; gap: 10px; flex: 1; }
@@ -269,8 +239,15 @@
   .row.end { justify-content: flex-end; }
   .row .name { max-width: 14em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .actions { display: flex; gap: 8px; }
+  .notice {
+    margin: 0;
+    padding: 6px 10px;
+    border-radius: 8px;
+    color: var(--accent);
+    background: var(--accent-soft);
+    font-weight: 600;
+  }
   .search { flex: 1; min-width: 0; }
-  .clear { align-self: flex-start; }
 
   .items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
   li { display: flex; align-items: center; gap: 2px; border: 1px solid transparent; border-radius: 8px; }
@@ -291,7 +268,6 @@
     border: 0;
     cursor: pointer;
   }
-  .num { min-width: 1.5em; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
   .name { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; font-weight: 600; }
   .name, .sub { text-overflow: ellipsis; white-space: nowrap; }
   .sub { font-weight: 400; overflow: hidden; }

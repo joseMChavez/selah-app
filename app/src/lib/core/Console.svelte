@@ -6,7 +6,7 @@
   import SlideStrip from "$lib/features/output/SlideStrip.svelte";
   import StylePanel from "$lib/features/output/StylePanel.svelte";
   import StreamWorkspace from "$lib/features/stream/StreamWorkspace.svelte";
-  import { formatCountdown, newTimer, pauseTimer, resumeTimer } from "$lib/features/clock/clock";
+  import { formatCountdown, pauseTimer, resumeTimer, startTimer } from "$lib/features/clock/clock";
   import { deckPosition, moveDeck } from "$lib/features/output/deck";
   import { i18n, locales, setLocale, t, type Locale, type MessageKey } from "$lib/i18n/index.svelte";
   import { toMessage, type Message } from "$lib/core/messages";
@@ -20,6 +20,8 @@
   import { chooseBible, findItem, remote, remoteStatus, syncRemote, watchRemoteClients } from "$lib/features/remote/console.svelte";
   import { rememberLive, resume } from "$lib/features/output/history.svelte";
   import type { RemoteCommand } from "$lib/features/remote/protocol";
+  import { openPlan } from "$lib/features/plans/plans.svelte";
+  import { contentOf, problem as planProblem, session as planSession, title as planTitle } from "$lib/features/plans/items.svelte";
 
   const MONITOR_POLL_MS = 2000;
   const SETTINGS_ICON = "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z";
@@ -70,7 +72,10 @@
       case "video": return t(content.paused ? "describe.videoPaused" : "describe.video", { name: baseName(content.path) });
       case "pdf": return t("describe.pdf", { name: baseName(content.path), n: content.page });
       case "clock": return t("describe.clock");
-      case "timer": return t(content.endsAt === null ? "describe.timerPaused" : "describe.timer", { time: formatCountdown(content.durationMs) });
+      case "timer": {
+        const timer = t(content.endsAt === null ? "describe.timerPaused" : "describe.timer", { time: formatCountdown(content.durationMs) });
+        return content.label ? `${timer} · ${content.label}` : timer;
+      }
     }
   }
 
@@ -173,7 +178,7 @@
     if (isTyping(document.activeElement)) (document.activeElement as HTMLElement).blur();
     if (!output.open && selectedIndex !== null) output = await platform.openOutput(selectedIndex);
     // Un temporizador preparado empieza a contar al llegar a la pantalla.
-    if (content.kind === "timer") content = newTimer(content.durationMs);
+    if (content.kind === "timer") content = startTimer(content);
     beforeBlack = null;
     output = await platform.setOutputContent(content);
   });
@@ -184,7 +189,7 @@
     const now = Date.now();
     switch (change) {
       case "toggle": return send(c.endsAt === null ? resumeTimer(c, now) : pauseTimer(c, now));
-      case "restart": return send(c.endsAt === null ? { ...c, remainingMs: c.durationMs } : newTimer(c.durationMs));
+      case "restart": return send(c.endsAt === null ? { ...c, remainingMs: c.durationMs } : startTimer(c, now));
       case "add":
         return send(c.endsAt === null ? { ...c, remainingMs: c.remainingMs + TIMER_STEP_MS } : { ...c, endsAt: c.endsAt + TIMER_STEP_MS });
     }
@@ -258,6 +263,7 @@
       case "clear": return send({ kind: "empty" });
       case "scripture": return showFromRemote(command.book, command.chapter, command.verse);
       case "setBible": return chooseBible(command.id);
+      case "planItem": return showPlanItem(command.id);
       case "show": {
         // Lo preparado o algo que estuvo en pantalla (la presentación en la página donde quedó). Ya se confirmó en el teléfono.
         const content = findItem(command.key, prepared);
@@ -272,6 +278,24 @@
     const content = output.content;
     untrack(() => rememberLive(content));
   });
+
+  /** Un elemento del plan pedido desde el teléfono. Ya se confirmó allí, así que va directo a la pantalla. */
+  async function showPlanItem(id: string) {
+    const item = openPlan.plan?.items.find((i) => i.id === id);
+    if (!item || item.kind === "section" || planProblem(item)) return;
+    try {
+      const content = await contentOf(item);
+      if (!content || content.kind === "empty") {
+        if (item.kind === "scripture") error = { key: "plans.verseNotFound", params: { reference: planTitle(item) } };
+        return;
+      }
+      planSession.current = { id: item.id, content };
+      prepare(content);
+      sendPrepared(prepared);
+    } catch (e) {
+      error = toMessage(e);
+    }
+  }
 
   /** Un versículo pedido desde el teléfono. Ya se confirmó allí, así que va directo a la pantalla. */
   async function showFromRemote(book: number, chapter: number, verse: number) {

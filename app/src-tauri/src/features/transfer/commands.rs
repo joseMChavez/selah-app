@@ -12,6 +12,7 @@ use crate::core::assets::allow_media;
 use crate::core::db::{now_secs, with_store, Db};
 use crate::core::error::{internal, CommandError};
 use crate::core::picker::{self, dialog_extensions};
+use crate::features::plans::domain::{ItemContent, Plan, PlanItem};
 use crate::features::transfer::domain::split_slides;
 
 /// Un archivo de letras no pesa más que esto, ni con fondos.
@@ -45,7 +46,7 @@ pub struct ImportPreview {
     /// Ya están con otra letra: el usuario elige qué hacer.
     conflicts: Vec<SongSummary>,
     invalid: Vec<InvalidSong>,
-    /// Canciones que trae como lista del culto (en .hpls, todas).
+    /// Canciones que trae como lista del culto (en .hpls, todas); al importar pueden formar un plan.
     setlist: usize,
 }
 
@@ -56,7 +57,8 @@ pub struct ImportResult {
     replaced: usize,
     skipped: usize,
     invalid: usize,
-    setlist_added: usize,
+    /// Letras del plan creado con la lista del archivo; 0 si no se creó.
+    plan_songs: usize,
 }
 
 #[derive(Serialize)]
@@ -134,13 +136,14 @@ pub async fn transfer_import_pick(
 }
 
 /// Guarda lo leído por `transfer_import_pick`. `imported_suffix` es «(importada)» en el idioma de la interfaz.
+/// Con `plan_name`, la lista del archivo se guarda además como un plan con ese nombre.
 #[tauri::command]
 pub fn transfer_import_apply(
     app: AppHandle,
     state: State<'_, TransferState>,
     db: State<'_, Db>,
     on_conflict: OnConflict,
-    add_to_setlist: bool,
+    plan_name: Option<String>,
     imported_suffix: String,
 ) -> Result<ImportResult, CommandError> {
     let pending = state.0.lock().unwrap().take().ok_or_else(|| internal("no hay nada leído para importar"))?;
@@ -174,18 +177,26 @@ pub fn transfer_import_apply(
         |i| saved.get(&i).cloned(),
         || uuid::Uuid::new_v4().to_string(),
     );
-    let to_setlist: Vec<String> = if add_to_setlist {
-        pending.setlist.iter().filter_map(|i| resolution.ids.get(i).cloned()).collect()
-    } else {
-        Vec::new()
-    };
-    let setlist_added = with_store(&db, |store| store.import_songs(&resolution.save, &to_setlist))?;
+    let new_plan = plan_name.filter(|name| !name.trim().is_empty()).map(|name| Plan {
+        id: uuid::Uuid::new_v4().to_string(),
+        name: name.trim().to_string(),
+        date: None,
+        notes: String::new(),
+        items: pending
+            .setlist
+            .iter()
+            .filter_map(|i| resolution.ids.get(i))
+            .map(|id| PlanItem { id: uuid::Uuid::new_v4().to_string(), content: ItemContent::Song { song_id: id.clone() } })
+            .collect(),
+    });
+    let new_plan = new_plan.filter(|p| !p.items.is_empty());
+    with_store(&db, |store| store.import_songs(&resolution.save, new_plan.as_ref()))?;
     Ok(ImportResult {
         added: resolution.added,
         replaced: resolution.replaced,
         skipped: resolution.skipped,
         invalid: plan.invalid.len(),
-        setlist_added,
+        plan_songs: new_plan.map_or(0, |p| p.items.len()),
     })
 }
 
@@ -213,7 +224,7 @@ fn save_background(dir: &Path, background: &Background) -> Result<PathBuf, Strin
     Ok(path)
 }
 
-/// Exporta la biblioteca entera (o solo las letras de la lista del culto) a un .selah, con sus fondos.
+/// Exporta la biblioteca entera (o solo las letras de un plan, como lista del culto) a un .selah, con sus fondos.
 #[tauri::command]
 pub async fn transfer_export(
     app: AppHandle,
@@ -221,7 +232,7 @@ pub async fn transfer_export(
     title: String,
     filter_name: String,
     file_name: String,
-    only_setlist: bool,
+    plan_id: Option<String>,
 ) -> Result<Option<ExportResult>, CommandError> {
     let request = picker::Request {
         title,
@@ -236,8 +247,16 @@ pub async fn transfer_export(
     }
 
     let mut songs = with_store(&db, |store| store.songs())?;
-    let setlist = with_store(&db, |store| store.setlist())?;
-    if only_setlist {
+    // La lista del archivo: las letras del plan, en su orden y sin repetir.
+    let mut setlist: Vec<String> = Vec::new();
+    if let Some(id) = plan_id {
+        let plan = with_store(&db, |store| store.plan(&id))?.ok_or_else(|| internal("el plan ya no existe"))?;
+        for item in plan.items {
+            match item.content {
+                ItemContent::Song { song_id } if !setlist.contains(&song_id) => setlist.push(song_id),
+                _ => {}
+            }
+        }
         songs = setlist.iter().filter_map(|id| songs.iter().find(|s| &s.id == id).cloned()).collect();
     }
     let export = |reason: String| CommandError::ExportFailed { reason };

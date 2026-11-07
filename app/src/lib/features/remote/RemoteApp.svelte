@@ -282,6 +282,33 @@
       {/if}
     </section>
 
+    {#if status?.plan && status.plan.items.length > 0}
+      <section class="card">
+        <h2>{t("remote.plan", { name: status.plan.name })}</h2>
+        <div class="items">
+          {#each status.plan.items as item (item.id)}
+            {#if item.kind === "section"}
+              <h3 class="plan-section">{item.title}</h3>
+            {:else}
+              <button
+                class="btn item plan-item"
+                class:current={item.current}
+                onclick={() => confirmThen(item.title, item.detail, { type: "planItem", id: item.id })}
+                disabled={connection !== "open" || !item.available}
+              >
+                <span class="icon" aria-hidden="true">{item.icon}</span>
+                <span class="label">
+                  {item.title}
+                  <span class="muted small sub" class:bad={!item.available}>{item.detail}</span>
+                </span>
+                {#if item.shown}<span class="check" aria-label={t("plans.shown")}>✓</span>{/if}
+              </button>
+            {/if}
+          {/each}
+        </div>
+      </section>
+    {/if}
+
     {#if status && status.items.length > 0}
       <section class="card">
         <h2>{t("remote.items")}</h2>
@@ -426,6 +453,13 @@
   .items { display: flex; flex-direction: column; gap: 6px; }
   .item { justify-content: flex-start; gap: 8px; min-height: 52px; text-align: left; }
   .item .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .plan-section { margin: 8px 0 0; font-size: 12px; font-weight: 750; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+  .plan-item .label { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .plan-item .sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; }
+  .plan-item .sub.bad { color: var(--live); }
+  .plan-item.current { border-color: var(--accent); background: var(--accent-soft); }
+  .plan-item .icon { flex: none; width: 1.4em; text-align: center; }
+  .plan-item .check { flex: none; color: var(--accent); font-weight: 750; }
   .tag { flex: none; font-size: 12px; font-weight: 750; padding: 2px 6px; border-radius: 5px; background: var(--accent-soft); color: var(--text); }
   .search .field { flex: 1; min-width: 0; font-size: 16px; }
   .grid { display: grid; gap: 6px; }

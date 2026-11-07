@@ -35,7 +35,8 @@ src/
 | `media` | Elegir archivos y carpetas, fondos | `domain.rs` (tipos de archivo), `scan.rs` (recorrer carpetas) |
 | `presentations` | PowerPoint/Impress/Keynote → PDF, copia privada de LibreOffice | `convert.rs`, `libreoffice.rs` |
 | `bible` | Biblias incluidas e importadas, capítulos, búsqueda | `domain.rs` (tipos, normalizar, buscar), `xml.rs`, `library.rs` |
-| `songs` | Biblioteca de letras y lista del culto | `domain.rs` (Song), `repo.rs` |
+| `songs` | Biblioteca de letras | `domain.rs` (Song), `repo.rs` |
+| `plans` | Planes del culto: lo que se va a presentar, en orden (D-019) | `domain.rs` (Plan, PlanItem), `repo.rs` |
 | `settings` | Ajustes por clave | `repo.rs` |
 | `obs` | Transmisión con OBS | `client.rs` |
 | `transfer` | Importar y exportar letras (.selah, listas de Holyrics .hpls) | `domain.rs` (validar, repetidas, qué guardar), `formats/`, `repo.rs` |
@@ -83,7 +84,7 @@ La importación y exportación de letras está hecha como una funcionalidad aut�
 | `app/src/lib/features/index.ts` | `transferPanel` en la lista de paneles |
 | `platform/types.ts`, `platform/tauri.ts`, `core/messages.ts`, `i18n/*.ts` | sus llamadas, errores y textos |
 
-Usa piezas públicas de otras funcionalidades: la base (`core::db`), el tipo `Song` y `upsert_song` de `songs`, el selector de archivos (`core::picker`, con su modo `Save`). Un formato nuevo (OpenLyrics, EasyWorship…) es un archivo más en `formats/` con su `read`, reconocido en `commands::read_file`.
+Usa piezas públicas de otras funcionalidades: la base (`core::db`), el tipo `Song` y `upsert_song` de `songs`, el tipo `Plan` y `upsert_plan` de `plans`, el selector de archivos (`core::picker`, con su modo `Save`). Un formato nuevo (OpenLyrics, EasyWorship…) es un archivo más en `formats/` con su `read`, reconocido en `commands::read_file`.
 
 ### …un error nuevo
 
@@ -100,7 +101,7 @@ app/src/
     core/                Console.svelte (la consola), panels.ts (contrato de paneles), settings, theme, messages
     features/
       index.ts           paneles de contenido, en el orden de la barra lateral
-      bible/  songs/  media/  clock/      panel + estado + index.ts
+      plans/  bible/  songs/  media/  clock/      panel + estado + index.ts
       output/            OutputView (lo que se dibuja en pantalla), OutputWindow, StylePanel, SlideStrip
       presentations/     descarga de LibreOffice
       remote/            control remoto: protocol.ts (lo que se dicen teléfono y consola), RemoteApp (la página del teléfono, ruta /remote), RemoteSettings

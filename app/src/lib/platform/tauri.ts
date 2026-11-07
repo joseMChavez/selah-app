@@ -43,9 +43,15 @@ export const tauriPlatform: Platform = {
   songsList: () => invoke("plugin:songs|songs_list"),
   songSave: (song) => invoke("plugin:songs|song_save", { song }),
   songDelete: (id) => invoke("plugin:songs|song_delete", { id }),
-  setlistGet: () => invoke("plugin:songs|setlist_get"),
-  setlistSet: (ids) => invoke("plugin:songs|setlist_set", { ids }),
   songsReset: () => invoke("plugin:songs|songs_reset"),
+  plansList: () => invoke("plugin:plans|plans_list"),
+  planSave: (plan) => invoke("plugin:plans|plan_save", { plan }),
+  planDelete: (id) => invoke("plugin:plans|plan_delete", { id }),
+  plansReset: () => invoke("plugin:plans|plans_reset"),
+  planAllowFiles: (id) => invoke("plugin:plans|plan_allow_files", { id }),
+  planPickMedia: (title, filterName) => invoke("plugin:plans|plan_pick_media", { title, filterName }),
+  planPickBackground: (title, filterName) => invoke("plugin:plans|plan_pick_background", { title, filterName }),
+  plansCleanFiles: () => invoke("plugin:plans|plans_clean_files"),
   remoteInfo: () => invoke("plugin:remote|remote_info"),
   remoteStart: () => invoke("plugin:remote|remote_start"),
   remoteStop: () => invoke("plugin:remote|remote_stop"),
@@ -54,11 +60,11 @@ export const tauriPlatform: Platform = {
   onRemoteCommand: (handler) => listen<RemoteCommand>("remote-command", (event) => handler(event.payload)),
   onRemoteClients: (handler) => listen<number>("remote-clients", (event) => handler(event.payload)),
   transferImportPick: (title, filterName) => invoke("plugin:transfer|transfer_import_pick", { title, filterName }),
-  transferImportApply: (onConflict, addToSetlist, importedSuffix) =>
-    invoke("plugin:transfer|transfer_import_apply", { onConflict, addToSetlist, importedSuffix }),
+  transferImportApply: (onConflict, planName, importedSuffix) =>
+    invoke("plugin:transfer|transfer_import_apply", { onConflict, planName, importedSuffix }),
   transferImportCancel: () => invoke("plugin:transfer|transfer_import_cancel"),
-  transferExport: (title, filterName, fileName, onlySetlist) =>
-    invoke("plugin:transfer|transfer_export", { title, filterName, fileName, onlySetlist }),
+  transferExport: (title, filterName, fileName, planId) =>
+    invoke("plugin:transfer|transfer_export", { title, filterName, fileName, planId }),
   obsDetect: () => invoke("plugin:obs|obs_detect"),
   obsEnableWebsocket: () => invoke("plugin:obs|obs_enable_websocket"),
   obsLaunch: () => invoke("plugin:obs|obs_launch"),

@@ -4,6 +4,7 @@ pub mod bible;
 pub mod media;
 pub mod obs;
 pub mod output;
+pub mod plans;
 pub mod presentations;
 pub mod remote;
 pub mod settings;

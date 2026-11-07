@@ -4,6 +4,7 @@
   import type { PanelProps } from "$lib/core/panels";
   import { toMessage } from "$lib/core/messages";
   import { library, loadLibrary } from "$lib/features/songs/library.svelte";
+  import { loadPlans, openPlan, plans } from "$lib/features/plans/plans.svelte";
   import { t, type MessageKey } from "$lib/i18n/index.svelte";
   import { platform, type ImportPreview, type ImportResult, type OnConflict } from "$lib/platform";
 
@@ -22,12 +23,24 @@
 
   let preview = $state<ImportPreview | null>(null);
   let onConflict = $state<OnConflict>("skip");
-  let addToSetlist = $state(false);
+  /** Guardar la lista del archivo como un plan, y con qué nombre. */
+  let makePlan = $state(false);
+  let planName = $state("");
+  /** Plan cuyas letras se exportan. */
+  let exportPlanId = $state<string | null>(openPlan.id);
   let busy = $state(false);
   let result = $state<ImportResult | null>(null);
   let exported = $state<{ path: string; songs: number } | null>(null);
 
   let importable = $derived(preview ? preview.fresh.length + (onConflict === "skip" ? 0 : preview.conflicts.length) : 0);
+  let withSongs = $derived(plans.all.filter((p) => p.items.some((i) => i.kind === "song")));
+  let exportPlan = $derived(withSongs.find((p) => p.id === exportPlanId) ?? withSongs[0] ?? null);
+  let exportPlanSongs = $derived(exportPlan ? new Set(exportPlan.items.flatMap((i) => (i.kind === "song" ? [i.songId] : []))).size : 0);
+  let creatingPlan = $derived(makePlan && preview !== null && preview.setlist > 0 && planName.trim() !== "");
+
+  function fileStem(file: string): string {
+    return (file.split(/[\\/]/).pop() ?? file).replace(/\.[^.]+$/, "");
+  }
 
   async function pick() {
     result = null;
@@ -38,8 +51,9 @@
       if (!p) return;
       preview = p;
       onConflict = "skip";
-      // Una lista de Holyrics es la lista de un culto: lo normal es querer usarla como tal.
-      addToSetlist = p.format === "holyrics";
+      // Una lista de Holyrics es la lista de un culto: lo normal es querer usarla como plan.
+      makePlan = p.format === "holyrics";
+      planName = fileStem(p.file);
     } catch (e) {
       onerror(toMessage(e));
     } finally {
@@ -50,9 +64,9 @@
   async function apply() {
     try {
       busy = true;
-      result = await platform.transferImportApply(onConflict, addToSetlist && preview!.setlist > 0, t("transfer.importedSuffix"));
+      result = await platform.transferImportApply(onConflict, creatingPlan ? planName.trim() : null, t("transfer.importedSuffix"));
       preview = null;
-      await loadLibrary();
+      await Promise.all([loadLibrary(), loadPlans()]);
     } catch (e) {
       onerror(toMessage(e));
     } finally {
@@ -65,14 +79,15 @@
     platform.transferImportCancel().catch(() => {});
   }
 
-  async function exportSongs(onlySetlist: boolean) {
+  async function exportSongs(planId: string | null) {
     result = null;
     exported = null;
     const date = new Date().toISOString().slice(0, 10);
-    const name = `${t(onlySetlist ? "transfer.fileSetlist" : "transfer.fileLibrary")} ${date}.selah`;
+    const plan = plans.all.find((p) => p.id === planId);
+    const name = plan ? `${plan.name} ${plan.date ?? date}.selah` : `${t("transfer.fileLibrary")} ${date}.selah`;
     try {
       busy = true;
-      exported = await platform.transferExport(t("transfer.exportTitle"), t("transfer.exportFilter"), name, onlySetlist);
+      exported = await platform.transferExport(t("transfer.exportTitle"), t("transfer.exportFilter"), name, planId);
     } catch (e) {
       onerror(toMessage(e));
     } finally {
@@ -148,14 +163,17 @@
 
         {#if preview.setlist > 0}
           <label class="check">
-            <input type="checkbox" bind:checked={addToSetlist} />
-            {t("transfer.addToSetlist", { count: preview.setlist })}
+            <input type="checkbox" bind:checked={makePlan} />
+            {t("transfer.makePlan", { count: preview.setlist })}
           </label>
+          {#if makePlan}
+            <input class="field plan-name" bind:value={planName} aria-label={t("plans.name")} maxlength="80" />
+          {/if}
         {/if}
 
         <div class="row end">
           <button class="btn ghost" onclick={cancel} disabled={busy}>{t("songs.cancel")}</button>
-          <button class="btn primary" onclick={apply} disabled={busy || (importable === 0 && !(addToSetlist && preview.setlist > 0))}>
+          <button class="btn primary" onclick={apply} disabled={busy || (importable === 0 && !creatingPlan)}>
             {t("transfer.apply", { count: importable })}
           </button>
         </div>
@@ -165,7 +183,7 @@
     {#if result}
       <p class="ok small" role="status">
         {t("transfer.done", { added: result.added, replaced: result.replaced, skipped: result.skipped })}
-        {#if result.setlistAdded > 0}· {t("transfer.doneSetlist", { count: result.setlistAdded })}{/if}
+        {#if result.planSongs > 0}· {t("transfer.donePlan", { count: result.planSongs })}{/if}
       </p>
     {/if}
   </section>
@@ -174,13 +192,22 @@
     <h3>{t("transfer.exportHeading")}</h3>
     <p class="muted small">{t("transfer.exportIntro")}</p>
     <div class="row">
-      <button class="btn" onclick={() => exportSongs(false)} disabled={busy || library.songs.length === 0}>
+      <button class="btn" onclick={() => exportSongs(null)} disabled={busy || library.songs.length === 0}>
         {t("transfer.exportLibrary", { count: library.songs.length })}
       </button>
-      <button class="btn" onclick={() => exportSongs(true)} disabled={busy || library.setlist.length === 0}>
-        {t("transfer.exportSetlist", { count: library.setlist.length })}
-      </button>
     </div>
+    {#if withSongs.length > 0}
+      <div class="row">
+        <select class="field" value={exportPlan?.id} onchange={(e) => (exportPlanId = e.currentTarget.value)} aria-label={t("transfer.exportPlanPick")}>
+          {#each withSongs as p (p.id)}
+            <option value={p.id}>{p.name}{p.date ? ` · ${p.date}` : ""}</option>
+          {/each}
+        </select>
+        <button class="btn" onclick={() => exportSongs(exportPlan!.id)} disabled={busy || !exportPlan}>
+          {t("transfer.exportPlan", { count: exportPlanSongs })}
+        </button>
+      </div>
+    {/if}
     {#if exported}
       <p class="ok small" role="status">{t("transfer.exported", { count: exported.songs })} <code title={exported.path}>{exported.path}</code></p>
     {/if}
@@ -202,4 +229,5 @@
   .choices { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; }
   .choice, .check { display: flex; gap: 8px; align-items: baseline; }
   code { overflow-wrap: anywhere; }
+  .plan-name { max-width: 24em; }
 </style>

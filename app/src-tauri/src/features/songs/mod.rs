@@ -1,4 +1,4 @@
-// Biblioteca de letras y lista del culto.
+// Biblioteca de letras.
 // Plugin interno «songs»: la interfaz llama a sus comandos como `plugin:songs|<comando>` (platform/tauri.ts).
 mod commands;
 pub mod domain;
@@ -15,8 +15,6 @@ pub fn plugin() -> TauriPlugin<Wry> {
             commands::songs_list,
             commands::song_save,
             commands::song_delete,
-            commands::setlist_get,
-            commands::setlist_set,
             commands::songs_reset,
         ])
         .build()
