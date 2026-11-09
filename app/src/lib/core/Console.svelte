@@ -17,7 +17,7 @@
   import { setTheme, theme, type ThemeChoice } from "$lib/core/theme.svelte";
   import { loadScripture } from "$lib/features/bible/scripture";
   import { bookName } from "$lib/features/bible/books";
-  import { chooseBible, findItem, remote, remoteStatus, syncRemote, watchRemoteClients } from "$lib/features/remote/console.svelte";
+  import { chooseBible, findItem, remote, remoteStatus, syncRemote, syncThumbs, watchRemoteClients } from "$lib/features/remote/console.svelte";
   import { rememberLive, resume } from "$lib/features/output/history.svelte";
   import type { RemoteCommand } from "$lib/features/remote/protocol";
   import { openPlan } from "$lib/features/plans/plans.svelte";
@@ -264,6 +264,7 @@
       case "scripture": return showFromRemote(command.book, command.chapter, command.verse);
       case "setBible": return chooseBible(command.id);
       case "planItem": return showPlanItem(command.id);
+      case "goTo": return goLive(command.n);
       case "show": {
         // Lo preparado o algo que estuvo en pantalla (la presentación en la página donde quedó). Ya se confirmó en el teléfono.
         const content = findItem(command.key, prepared);
@@ -318,6 +319,14 @@
   $effect(() => {
     const status = remoteStatus(output, prepared, livePosition, output.content.kind === "black" && beforeBlack !== null, describe);
     platform.remotePublish(status).catch(() => {});
+  });
+
+  // Miniaturas del PDF en pantalla para los teléfonos. Solo con teléfonos conectados.
+  $effect(() => {
+    const content = output.content;
+    const path = content.kind === "pdf" && (remote.info?.clients ?? 0) > 0 ? content.path : null;
+    const page = content.kind === "pdf" ? content.page : 1;
+    untrack(() => syncThumbs(path, page));
   });
 
   onMount(() => {

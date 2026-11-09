@@ -11,6 +11,8 @@
   const KEY_STORAGE = "selah-remote-key";
   const RETRY_MS = [1000, 2000, 3000, 5000];
   const FIRST_NEW_TESTAMENT_BOOK = 40;
+  const UNDO_MS = 6000;
+  const THUMB_RETRIES = 4;
 
   type Connection = "connecting" | "open" | "offline" | "rejected" | "noKey";
   type Step =
@@ -27,6 +29,12 @@
   /** Lo que espera el «¿Seguro?»: un versículo o algo de «Para mostrar». */
   let asking = $state<{ title: string; text: string; command: RemoteCommand } | null>(null);
   let verseList = $state<HTMLOListElement>();
+  let stripList = $state<HTMLOListElement>();
+  /** Tras saltar desde la tira: para volver a donde se estaba con un toque (deshacer en vez de preguntar). */
+  let undo = $state<{ from: number; to: number; strip: string } | null>(null);
+  let undoTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Reintentos de cada miniatura que aún no estaba lista (la consola las dibuja poco a poco). */
+  let thumbTries = $state<Record<number, number>>({});
 
   /** Abierta como app instalada (pantalla de inicio): ya ocupa toda la pantalla. */
   const installed = matchMedia("(display-mode: fullscreen), (display-mode: standalone)").matches || (navigator as { standalone?: boolean }).standalone === true;
@@ -43,6 +51,9 @@
   let position = $derived(status?.position ?? null);
   let canPrevious = $derived(position !== null && position.n > 1);
   let canNext = $derived(position !== null && (position.total === null || position.n < position.total));
+  let strip = $derived(status?.strip ?? null);
+  /** Identifica lo que se puede elegir: si cambia (otro PDF, otra letra), lo de «Volver» ya no vale. */
+  let stripId = $derived(strip ? (strip.kind === "pages" ? strip.doc : strip.labels.join("\u0001")) : "");
   let oldTestament = $derived(bible?.books.filter((b) => b.number < FIRST_NEW_TESTAMENT_BOOK) ?? []);
   let newTestament = $derived(bible?.books.filter((b) => b.number >= FIRST_NEW_TESTAMENT_BOOK) ?? []);
 
@@ -107,6 +118,40 @@
 
   function command(c: RemoteCommand) {
     if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(c));
+    if (c.type !== "goTo") clearUndo();
+  }
+
+  function clearUndo() {
+    clearTimeout(undoTimer);
+    undo = null;
+  }
+
+  /** Saltar desde la tira: va directo (como Anterior/Siguiente) y deja unos segundos para volver. */
+  function jump(n: number) {
+    if (!position || n === position.n) return;
+    const from = undo?.strip === stripId ? undo.from : position.n;
+    command({ type: "goTo", n });
+    clearTimeout(undoTimer);
+    undo = from === n ? null : { from, to: n, strip: stripId };
+    undoTimer = setTimeout(clearUndo, UNDO_MS);
+  }
+
+  function goBack() {
+    if (!undo) return;
+    const from = undo.from;
+    clearUndo();
+    command({ type: "goTo", n: from });
+  }
+
+  function thumbUrl(doc: string, n: number): string {
+    const tries = thumbTries[n] ?? 0;
+    return `/api/thumb?${new URLSearchParams({ key: key ?? "", doc, n: String(n), ...(tries ? { r: String(tries) } : {}) })}`;
+  }
+
+  /** La consola aún la está dibujando: se vuelve a pedir en un momento, pocas veces. */
+  function thumbFailed(n: number) {
+    const tries = thumbTries[n] ?? 0;
+    if (tries < THUMB_RETRIES) setTimeout(() => (thumbTries[n] = tries + 1), 1000);
   }
 
   function chapterTitle(book: number, chapter?: number): string {
@@ -187,8 +232,36 @@
     }
   }
 
+  // Otro documento: sus miniaturas empiezan de cero. Y si lo elegible cambió, «Volver» ya no aplica.
+  $effect(() => {
+    void stripId;
+    thumbTries = {};
+    if (undo && undo.strip !== stripId) clearUndo();
+  });
+
+  // La posición actual a la vista en la tira, sin mover la página (scrollIntoView la desplazaría).
+  $effect(() => {
+    void position?.n;
+    void stripId;
+    tick().then(() => {
+      const current = stripList?.querySelector<HTMLElement>("[aria-current='true']");
+      if (!stripList || !current) return;
+      const left = current.offsetLeft - (stripList.clientWidth - current.offsetWidth) / 2;
+      stripList.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
+    });
+  });
+
   /** La referencia que está en pantalla, para resaltar su versículo en la lista. */
   let liveReference = $derived(status?.live.kind === "scripture" ? status.live.reference : null);
+
+  /** «Página 12», «Diapositiva 3»…: para el aviso de «Volver». */
+  function stepName(n: number): string {
+    return t(`remote.step.${position?.unit ?? "slide"}` as MessageKey, { n });
+  }
+
+  function positionLabelFor(n: number, total: number): string {
+    return t(`position.${position?.unit ?? "slide"}` as MessageKey, { n, total });
+  }
 
   function positionLabel(): string {
     if (!position) return "";
@@ -270,13 +343,53 @@
           <p class="ref">{live.reference} <span class="muted small">{live.version}</span></p>
           <p class="text">{live.text}</p>
         {:else if live.kind === "pdf"}
-          <p class="ref">{t("remote.presentation", { name: live.name })}</p>
+          <!-- Espejo de la pantalla: la página que ve la congregación. -->
+          <div class="screen">
+            {#if strip?.kind === "pages" && position}
+              {#key `${strip.doc}-${position.n}-${thumbTries[position.n] ?? 0}`}
+                <img src={thumbUrl(strip.doc, position.n)} alt={positionLabel()} onerror={() => position && thumbFailed(position.n)} />
+              {/key}
+            {/if}
+            <span class="screen-num" aria-hidden="true">{position?.n ?? ""}</span>
+          </div>
+          <p class="ref small">{t("remote.presentation", { name: live.name })}</p>
         {:else if live.kind === "text"}
           <p class="text">{live.text}</p>
         {:else if live.kind === "other"}
           <p class="ref">{live.description}</p>
+        {:else if live.kind === "black"}
+          <div class="screen black"><span>{t("remote.black")}</span></div>
         {:else}
-          <p class="muted">{t(live.kind === "black" ? "describe.black" : "describe.empty")}</p>
+          <p class="muted">{t("describe.empty")}</p>
+        {/if}
+        {#if strip && position}
+          <!-- Para saltar a otra página, diapositiva o versículo: va directo, con «Volver» por si fue sin querer. -->
+          <ol class="strip" class:pages={strip.kind === "pages"} bind:this={stripList} aria-label={t("remote.choose")}>
+            {#if strip.kind === "pages"}
+              {#each { length: strip.total } as _, i (i)}
+                {@const n = i + 1}
+                <li>
+                  <button class="thumb" aria-current={n === position.n} aria-label={t("position.page", { n, total: strip.total })} disabled={connection !== "open"} onclick={() => jump(n)}>
+                    <span class="frame">
+                      {#key thumbTries[n] ?? 0}
+                        <img src={thumbUrl(strip.doc, n)} alt="" loading="lazy" onerror={() => thumbFailed(n)} />
+                      {/key}
+                    </span>
+                    <span class="num">{n}</span>
+                  </button>
+                </li>
+              {/each}
+            {:else}
+              {#each strip.labels as label, i (i)}
+                {@const n = i + 1}
+                <li>
+                  <button class="chip" aria-current={n === position.n} aria-label={positionLabelFor(n, strip.labels.length)} disabled={connection !== "open"} onclick={() => jump(n)}>
+                    {#if position.unit === "verse"}<strong>{label}</strong>{:else}<span class="num">{n}</span><span class="chip-text">{label}</span>{/if}
+                  </button>
+                </li>
+              {/each}
+            {/if}
+          </ol>
         {/if}
         {#if !status.open}<p class="muted small">{t("remote.outputClosed")}</p>{/if}
       {/if}
@@ -384,6 +497,12 @@
 
     <!-- A mano del pulgar: siempre visible abajo. -->
     <nav class="controls">
+      {#if undo}
+        <div class="undo" role="status">
+          <span>{stepName(undo.to)}</span>
+          <button class="btn" onclick={goBack} disabled={connection !== "open"}>{t("remote.undo", { step: stepName(undo.from) })}</button>
+        </div>
+      {/if}
       <p class="now"><span class="dot" aria-hidden="true"></span><strong>{summary()}</strong>{#if position}<span class="muted"> · {positionLabel()}</span>{/if}</p>
       <button class="btn big" onclick={() => command({ type: "previous" })} disabled={connection !== "open" || !canPrevious}>{t("live.previous")}</button>
       <button class="btn big" onclick={() => command({ type: "next" })} disabled={connection !== "open" || !canNext}>{t("live.next")}</button>
@@ -446,7 +565,7 @@
   h2 { font-size: 15px; margin: 0; }
   .live-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
   .ref { font-weight: 700; margin: 0; }
-  .text { margin: 0; line-height: 1.45; }
+  .text { margin: 0; line-height: 1.45; white-space: pre-line; }
   .search { display: flex; gap: 8px; }
   .version { display: flex; flex-direction: column; gap: 4px; }
   .version .field { font-size: 16px; }
@@ -501,5 +620,70 @@
   .now .dot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--live); }
   .backdrop { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: 16px; background: rgb(0 0 0 / 50%); }
   .confirm { width: min(460px, 100%); max-height: 80vh; overflow: auto; }
+  /* Espejo de la pantalla: 16:9 desde el principio para que nada salte mientras llega la imagen. */
+  .screen {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    max-height: 32vh;
+    width: 100%;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 8px;
+    background: #000;
+    outline: 2px solid var(--live);
+    outline-offset: -2px;
+  }
+  .screen img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+  .screen-num { color: rgb(255 255 255 / 45%); font-size: 28px; font-weight: 750; font-variant-numeric: tabular-nums; }
+  .screen.black { outline-color: var(--border); }
+  .screen.black span { color: rgb(255 255 255 / 70%); font-size: 14px; font-weight: 650; }
+  .strip {
+    list-style: none;
+    margin: 0 -14px;
+    padding: 2px 14px 6px;
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+  .strip::-webkit-scrollbar { display: none; }
+  .strip li { flex: none; scroll-snap-align: center; }
+  .thumb, .chip {
+    font: inherit;
+    color: var(--text);
+    background: var(--surface-2);
+    border: 2px solid transparent;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .thumb { display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 3px; width: 112px; }
+  .frame { position: relative; aspect-ratio: 16 / 9; border-radius: 5px; overflow: hidden; background: #000; }
+  .frame img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+  .thumb .num { font-size: 13px; font-weight: 650; text-align: center; font-variant-numeric: tabular-nums; }
+  .chip { min-height: 48px; max-width: 200px; padding: 6px 12px; display: flex; align-items: center; gap: 8px; text-align: left; }
+  .chip strong { min-width: 1.6em; text-align: center; font-variant-numeric: tabular-nums; }
+  .chip .num { flex: none; font-size: 13px; font-weight: 750; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .chip-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+  /* La posición actual: borde rojo de «en vivo» y número destacado (no solo color). */
+  .thumb[aria-current="true"], .chip[aria-current="true"] { border-color: var(--live); background: var(--live-soft); }
+  .thumb[aria-current="true"] .num, .chip[aria-current="true"] .num { color: var(--live); font-weight: 800; }
+  .thumb:disabled, .chip:disabled { opacity: 0.55; }
+  .undo {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 6px 6px 12px;
+    border-radius: 8px;
+    background: var(--text);
+    color: var(--bg);
+    font-size: 14px;
+    font-weight: 650;
+  }
+  .undo .btn { min-height: 40px; }
   .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 </style>

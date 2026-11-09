@@ -40,7 +40,7 @@ src/
 | `settings` | Ajustes por clave | `repo.rs` |
 | `obs` | Transmisión con OBS | `client.rs` |
 | `transfer` | Importar y exportar letras (.selah, listas de Holyrics .hpls) | `domain.rs` (validar, repetidas, qué guardar), `formats/`, `repo.rs` |
-| `remote` | Control remoto desde el teléfono (D-018) | `domain.rs` (órdenes, clave), `server.rs` (HTTP y WebSocket) |
+| `remote` | Control remoto desde el teléfono (D-018, D-020) | `domain.rs` (órdenes, clave), `server.rs` (HTTP y WebSocket), `thumbs.rs` (miniaturas del PDF en pantalla) |
 
 ### Reglas
 

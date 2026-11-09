@@ -57,6 +57,9 @@ export const tauriPlatform: Platform = {
   remoteStop: () => invoke("plugin:remote|remote_stop"),
   remoteResetKey: () => invoke("plugin:remote|remote_reset_key"),
   remotePublish: (status) => invoke("plugin:remote|remote_publish", { status }),
+  remoteThumbsStart: (doc, total) => invoke("plugin:remote|remote_thumbs_start", { doc, total }),
+  // Los bytes van tal cual (sin JSON); el documento y la página, en cabeceras.
+  remoteThumb: (doc, page, jpeg) => invoke("plugin:remote|remote_thumb", jpeg, { headers: { "x-doc": doc, "x-page": String(page) } }),
   onRemoteCommand: (handler) => listen<RemoteCommand>("remote-command", (event) => handler(event.payload)),
   onRemoteClients: (handler) => listen<number>("remote-clients", (event) => handler(event.payload)),
   transferImportPick: (title, filterName) => invoke("plugin:transfer|transfer_import_pick", { title, filterName }),

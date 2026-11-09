@@ -503,6 +503,12 @@ const es = {
   "plans.notInBible": "Esta versión no tiene ese libro o capítulo",
   "plans.verseNotFound": "La versión elegida no tiene {reference}",
   "plans.versesNotFound": "No se añadieron porque la versión no las tiene: {list}",
+  "remote.black": "Pantalla en negro",
+  "remote.choose": "Elegir posición",
+  "remote.step.page": "Página {n}",
+  "remote.step.slide": "Diapositiva {n}",
+  "remote.step.verse": "Versículo {n}",
+  "remote.undo": "↩ Volver a {step}",
   "remote.plan": "Plan · {name}",
 };
 

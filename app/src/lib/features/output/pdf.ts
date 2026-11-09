@@ -57,3 +57,23 @@ export async function renderPage(
     throw e;
   }
 }
+
+/** La página como JPEG de `width` px de ancho (miniaturas para el teléfono). */
+export async function pageJpeg(url: string, pageNumber: number, width: number): Promise<Uint8Array> {
+  const doc = await loadPdf(url);
+  const page = await doc.getPage(pageNumber);
+  const base = page.getViewport({ scale: 1 });
+  const viewport = page.getViewport({ scale: width / base.width });
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.floor(viewport.width);
+  canvas.height = Math.floor(viewport.height);
+  try {
+    await page.render({ canvas, viewport }).promise;
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.75));
+    if (!blob) throw new Error("toBlob");
+    return new Uint8Array(await blob.arrayBuffer());
+  } finally {
+    // Soltar la memoria del canvas enseguida (WebKit la retiene si no).
+    canvas.width = canvas.height = 0;
+  }
+}

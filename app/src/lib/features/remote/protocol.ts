@@ -11,7 +11,9 @@ export type RemoteCommand =
   | { type: "setBible"; id: string }
   | { type: "show"; key: string }
   /** Un elemento del plan abierto en la consola, por su id. */
-  | { type: "planItem"; id: string };
+  | { type: "planItem"; id: string }
+  /** Ir a la posición n (desde 1) de lo que está en pantalla: página, diapositiva o versículo. */
+  | { type: "goTo"; n: number };
 
 /** Algo que se puede volver a poner en pantalla desde el teléfono: lo preparado en la consola o lo reciente. */
 export interface RemoteItem {
@@ -44,6 +46,13 @@ export type RemotePlanItem =
       current: boolean;
     };
 
+/** Lo que se puede elegir de lo que está en pantalla. La posición actual es `position.n`. */
+export type RemoteStrip =
+  /** Páginas de un PDF: sus miniaturas están en /api/thumb?doc=…&n=…, mientras siga en pantalla. */
+  | { kind: "pages"; doc: string; total: number }
+  /** Diapositivas de texto o versículos: una etiqueta corta por cada uno. */
+  | { kind: "labels"; labels: string[] };
+
 /** Lo que está en pantalla, contado para el teléfono. */
 export type RemoteLive =
   | { kind: "empty" }
@@ -67,6 +76,8 @@ export interface RemoteStatus {
   confirmSend: boolean;
   /** Lo preparado y lo que estuvo en pantalla hace poco, lo más reciente primero (sin lo que está ahora). */
   items: RemoteItem[];
+  /** Para ver y elegir dentro de lo que está en pantalla; null si no hay nada que elegir. */
+  strip: RemoteStrip | null;
   /** El plan abierto en la consola; null si no hay. */
   plan: RemotePlan | null;
   /** Las versiones que se pueden elegir. */

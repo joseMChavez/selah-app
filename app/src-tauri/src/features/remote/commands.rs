@@ -3,6 +3,7 @@ use std::sync::atomic::Ordering;
 use qrcode::render::svg;
 use qrcode::QrCode;
 use serde::Serialize;
+use tauri::ipc::{InvokeBody, Request};
 use tauri::{AppHandle, State};
 use tokio::sync::watch;
 
@@ -55,6 +56,8 @@ pub async fn remote_start(app: AppHandle, state: State<'_, RemoteState>) -> Resu
         status: state.status.subscribe(),
         stop: stop_rx,
         clients: state.clients.clone(),
+        thumbs: state.thumbs.clone(),
+        thumbs_added: state.thumbs_added.subscribe(),
     };
     let port = server::start(shared).await.map_err(|e| CommandError::RemoteFailed { reason: e.to_string() })?;
     let mut running = state.running.lock().unwrap();
@@ -83,4 +86,26 @@ pub fn remote_reset_key(app: AppHandle, state: State<'_, RemoteState>) -> Remote
 #[tauri::command]
 pub fn remote_publish(state: State<'_, RemoteState>, status: serde_json::Value) {
     state.status.send_replace(serde_json::json!({ "type": "status", "status": status }).to_string());
+}
+
+/// Otro PDF en pantalla, de `total` páginas: se olvidan las miniaturas del anterior.
+#[tauri::command]
+pub fn remote_thumbs_start(state: State<'_, RemoteState>, doc: String, total: u32) -> bool {
+    state.thumbs.lock().unwrap().start(&doc, total)
+}
+
+/// Una miniatura dibujada por la consola. Llega como bytes (JPEG) y con el documento y la página en cabeceras,
+/// para no pasar las imágenes por JSON. false si se descarta (otro documento, o no es una miniatura).
+#[tauri::command]
+pub fn remote_thumb(state: State<'_, RemoteState>, request: Request<'_>) -> bool {
+    let header = |name: &str| request.headers().get(name).and_then(|v| v.to_str().ok());
+    let (Some(doc), Some(page)) = (header("x-doc"), header("x-page").and_then(|p| p.parse::<u32>().ok())) else {
+        return false;
+    };
+    let InvokeBody::Raw(jpeg) = request.body() else { return false };
+    let saved = state.thumbs.lock().unwrap().put(doc, page, jpeg.clone());
+    if saved {
+        state.thumbs_added.send_modify(|n| *n = n.wrapping_add(1));
+    }
+    saved
 }
