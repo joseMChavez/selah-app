@@ -376,6 +376,10 @@ export interface Platform {
   remoteResetKey(): Promise<RemoteInfo>;
   /** Lo que verán los teléfonos (features/remote/protocol.ts). */
   remotePublish(status: unknown): Promise<void>;
+  /** Otro PDF en pantalla, de `total` páginas: se olvidan las miniaturas del anterior. */
+  remoteThumbsStart(doc: string, total: number): Promise<boolean>;
+  /** Una miniatura (JPEG) de la página `page` de `doc`, para los teléfonos. false si se descartó. */
+  remoteThumb(doc: string, page: number, jpeg: Uint8Array): Promise<boolean>;
   onRemoteCommand(handler: (command: RemoteCommand) => void): Promise<() => void>;
   onRemoteClients(handler: (count: number) => void): Promise<() => void>;
 

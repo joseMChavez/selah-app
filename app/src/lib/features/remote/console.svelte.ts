@@ -9,9 +9,14 @@ import { setSetting, settings } from "$lib/core/settings.svelte";
 import { platform, type OutputContent, type OutputState, type RemoteInfo } from "$lib/platform";
 import { openPlan } from "$lib/features/plans/plans.svelte";
 import { detail, icon, problem, session, title } from "$lib/features/plans/items.svelte";
-import type { RemoteItem, RemoteLive, RemotePlan, RemoteStatus } from "./protocol";
+import { pageCount, pageJpeg } from "$lib/features/output/pdf";
+import type { RemoteItem, RemoteLive, RemotePlan, RemoteStatus, RemoteStrip } from "./protocol";
 
 const MAX_ITEMS = 6;
+/** Ancho de las miniaturas para el teléfono: nítidas en la vista grande, ligeras para el Wi‑Fi. */
+const THUMB_WIDTH = 480;
+/** Largo máximo de la etiqueta de una diapositiva de texto en la tira del teléfono. */
+const LABEL_CHARS = 40;
 
 export const remote = $state({
   info: null as RemoteInfo | null,
@@ -51,6 +56,50 @@ export function watchRemoteClients(): () => void {
     if (remote.info) remote.info.clients = count;
   });
   return () => void unlisten.then((fn) => fn());
+}
+
+/** El PDF cuyas miniaturas tienen los teléfonos. `doc` lo identifica ante el servidor; vacío si no hay ninguno. */
+export const thumbs = $state({ doc: "", path: "" });
+let generation = 0;
+
+/** Las páginas en el orden en que conviene dibujarlas: la actual, luego las de alrededor. */
+export function thumbOrder(page: number, total: number): number[] {
+  const order: number[] = [];
+  const start = Math.min(Math.max(page, 1), total);
+  for (let d = 0; order.length < total; d++) {
+    if (start + d <= total) order.push(start + d);
+    if (d > 0 && start - d >= 1) order.push(start - d);
+  }
+  return order;
+}
+
+/** Prepara las miniaturas del PDF `path` para los teléfonos: una vez por documento, en segundo plano,
+ *  empezando por la página `page`. Con null (otra cosa en pantalla, en negro, sin teléfonos) no hace nada:
+ *  las ya dibujadas se guardan hasta el próximo PDF, así volver a él no las dibuja otra vez. */
+export async function syncThumbs(path: string | null, page: number) {
+  if (!path || path === thumbs.path) return;
+  const mine = ++generation;
+  thumbs.doc = "";
+  thumbs.path = path;
+  const doc = crypto.randomUUID();
+  try {
+    const url = platform.mediaUrl(path);
+    const total = await pageCount(url);
+    if (mine !== generation || !(await platform.remoteThumbsStart(doc, total)) || mine !== generation) return;
+    thumbs.doc = doc;
+    for (const n of thumbOrder(page, total)) {
+      if (mine !== generation) return;
+      try {
+        await platform.remoteThumb(doc, n, await pageJpeg(url, n, THUMB_WIDTH));
+      } catch {
+        // Una página que no se pudo dibujar: el teléfono muestra su número en su lugar.
+      }
+      // Que la consola siga respondiendo mientras tanto.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  } catch {
+    // Sin miniaturas el teléfono sigue funcionando: muestra los números de página.
+  }
 }
 
 /** El contenido de un elemento de «Para mostrar». Si también estuvo en pantalla, vale cómo quedó allí
@@ -105,6 +154,25 @@ function planOf(): RemotePlan | null {
   };
 }
 
+/** Primera línea de una diapositiva, corta, para reconocerla en la tira. */
+function firstLine(text: string): string {
+  const line = text.trim().split("\n")[0]?.trim() ?? "";
+  return line.length > LABEL_CHARS ? `${line.slice(0, LABEL_CHARS - 1)}…` : line;
+}
+
+function stripOf(content: OutputContent, total: number | null): RemoteStrip | null {
+  switch (content.kind) {
+    case "pdf":
+      return thumbs.doc && thumbs.path === content.path && total ? { kind: "pages", doc: thumbs.doc, total } : null;
+    case "text":
+      return content.slides.length > 1 ? { kind: "labels", labels: content.slides.map(firstLine) } : null;
+    case "scripture":
+      return content.verses.length > 1 ? { kind: "labels", labels: content.verses.map((v) => v.reference.split(":").pop() ?? "") } : null;
+    default:
+      return null;
+  }
+}
+
 function liveOf(content: OutputContent, description: string): RemoteLive {
   switch (content.kind) {
     case "empty":
@@ -140,6 +208,7 @@ export function remoteStatus(
     position: position && { n: position.n, total: position.total, unit: kind === "pdf" ? "page" : kind === "scripture" ? "verse" : "slide" },
     canUnblack,
     confirmSend: settings.confirmSend,
+    strip: stripOf(output.content, position?.total ?? null),
     items: items(output.content, prepared, describe),
     plan: planOf(),
     bibles: visibleBibles().map((b) => ({ id: b.id, abbreviation: b.abbreviation, name: b.name })),

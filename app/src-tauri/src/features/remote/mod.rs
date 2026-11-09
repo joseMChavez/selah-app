@@ -7,6 +7,7 @@
 mod commands;
 pub mod domain;
 mod server;
+mod thumbs;
 
 use std::path::PathBuf;
 use std::sync::atomic::AtomicUsize;
@@ -17,6 +18,7 @@ use tauri::{AppHandle, Manager, Wry};
 use tokio::sync::watch;
 
 use self::domain::{is_key, new_key};
+use self::thumbs::Thumbs;
 
 pub const NAME: &str = "remote";
 
@@ -28,6 +30,8 @@ pub fn plugin() -> TauriPlugin<Wry> {
             commands::remote_stop,
             commands::remote_reset_key,
             commands::remote_publish,
+            commands::remote_thumbs_start,
+            commands::remote_thumb,
         ])
         .setup(|app, _api| {
             let key = load_key(app);
@@ -36,6 +40,8 @@ pub fn plugin() -> TauriPlugin<Wry> {
                 status: watch::channel("null".to_string()).0,
                 running: Mutex::new(None),
                 clients: Arc::new(AtomicUsize::new(0)),
+                thumbs: Arc::new(Mutex::new(Thumbs::default())),
+                thumbs_added: watch::channel(0).0,
             });
             Ok(())
         })
@@ -47,6 +53,10 @@ pub struct RemoteState {
     status: watch::Sender<String>,
     running: Mutex<Option<Running>>,
     clients: Arc<AtomicUsize>,
+    /// Miniaturas del PDF en pantalla (thumbs.rs).
+    thumbs: Arc<Mutex<Thumbs>>,
+    /// Cambia cada vez que llega una miniatura: /api/thumb espera a la que pidió el teléfono.
+    thumbs_added: watch::Sender<u64>,
 }
 
 /// Un servidor encendido. Al soltar `stop`, se apaga y se cierran sus conexiones.

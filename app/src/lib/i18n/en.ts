@@ -504,6 +504,12 @@ const en: Record<MessageKey, string> = {
   "plans.notInBible": "This version does not have that book or chapter",
   "plans.verseNotFound": "The chosen version does not have {reference}",
   "plans.versesNotFound": "Not added because the version does not have them: {list}",
+  "remote.black": "Screen is black",
+  "remote.choose": "Choose position",
+  "remote.step.page": "Page {n}",
+  "remote.step.slide": "Slide {n}",
+  "remote.step.verse": "Verse {n}",
+  "remote.undo": "↩ Back to {step}",
   "remote.plan": "Plan · {name}",
 };
 

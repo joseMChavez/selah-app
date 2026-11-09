@@ -3,13 +3,15 @@
 //   GET /remote?key=…    la página (la misma interfaz de Selah, ruta /remote)
 //   GET /_app/…          sus archivos
 //   GET /api/chapter     versículos de un capítulo, para elegir en el teléfono
+//   GET /api/thumb       miniatura de una página del PDF en pantalla (thumbs.rs)
 //   GET /remote.webmanifest?key=…   para instalarla como app (PWA); con una clave válida, la app abre ya vinculada
 //   GET /ws?key=…        WebSocket: el teléfono manda órdenes (domain::Command) y recibe lo que hay en pantalla
 //
 // Todo lo que no es la página pide la clave. Las órdenes no se aplican aquí: se pasan a la consola.
 use std::net::{IpAddr, Ipv4Addr, UdpSocket};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Query, State};
@@ -23,6 +25,7 @@ use tokio::net::TcpListener;
 use tokio::sync::watch;
 
 use super::domain::{same_key, Command, PORTS};
+use super::thumbs::{Lookup, Thumbs};
 use crate::core::events::{MAIN_LABEL, REMOTE_CLIENTS_EVENT, REMOTE_COMMAND_EVENT};
 use crate::features::bible;
 
@@ -37,6 +40,8 @@ pub struct Shared {
     /// Se cierra (o cambia) al apagar el control remoto.
     pub stop: watch::Receiver<bool>,
     pub clients: Arc<AtomicUsize>,
+    pub thumbs: Arc<Mutex<Thumbs>>,
+    pub thumbs_added: watch::Receiver<u64>,
 }
 
 impl Shared {
@@ -66,6 +71,7 @@ pub async fn start(shared: Shared) -> std::io::Result<u16> {
                     .route("/", get(|| async { Redirect::to("/remote") }))
                     .route("/ws", get(socket))
                     .route("/api/chapter", get(chapter))
+                    .route("/api/thumb", get(thumb))
                     .route("/remote.webmanifest", get(manifest))
                     .fallback(get(asset))
                     .with_state(shared);
@@ -174,6 +180,45 @@ async fn chapter(State(shared): State<Shared>, Query(query): Query<ChapterQuery>
     match verses {
         Ok(Some(verses)) => Json(verses).into_response(),
         _ => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+/// Cuánto espera el teléfono a una miniatura que la consola aún está dibujando.
+const THUMB_WAIT: Duration = Duration::from_secs(8);
+
+#[derive(Deserialize)]
+struct ThumbQuery {
+    key: Option<String>,
+    doc: String,
+    n: u32,
+}
+
+/// Una miniatura del PDF en pantalla. Si la consola aún no la dibujó, espera un poco a que llegue.
+async fn thumb(State(shared): State<Shared>, Query(query): Query<ThumbQuery>) -> Response {
+    if !shared.allows(query.key.as_deref()) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    let mut added = shared.thumbs_added.clone();
+    let found = tokio::time::timeout(THUMB_WAIT, async {
+        loop {
+            added.borrow_and_update();
+            match shared.thumbs.lock().unwrap().get(&query.doc, query.n) {
+                Lookup::Ready(jpeg) => return Some(jpeg),
+                Lookup::Gone => return None,
+                Lookup::Pending => {}
+            }
+            if added.changed().await.is_err() {
+                return None;
+            }
+        }
+    })
+    .await;
+    match found {
+        // El id del documento va en la dirección: la misma dirección es siempre la misma imagen.
+        Ok(Some(jpeg)) => ([(header::CONTENT_TYPE, "image/jpeg"), (header::CACHE_CONTROL, "private, max-age=3600")], jpeg.to_vec()).into_response(),
+        Ok(None) => StatusCode::NOT_FOUND.into_response(),
+        // Aún no llegó: el teléfono vuelve a pedirla.
+        Err(_) => StatusCode::SERVICE_UNAVAILABLE.into_response(),
     }
 }
 
