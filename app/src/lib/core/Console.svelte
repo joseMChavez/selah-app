@@ -20,6 +20,8 @@
   import { chooseBible, findItem, remote, remoteStatus, syncRemote, syncThumbs, watchRemoteClients } from "$lib/features/remote/console.svelte";
   import { rememberLive, resume } from "$lib/features/output/history.svelte";
   import type { RemoteCommand } from "$lib/features/remote/protocol";
+  import { layerKey } from "$lib/features/remote/board";
+  import { sheetNumber, strokesOf, watchBoard } from "$lib/features/remote/board.svelte";
   import { openPlan } from "$lib/features/plans/plans.svelte";
   import { contentOf, problem as planProblem, session as planSession, title as planTitle } from "$lib/features/plans/items.svelte";
 
@@ -56,6 +58,14 @@
   );
   let preparedPosition = $derived(deckPosition(prepared, pdfPages));
   let livePosition = $derived(deckPosition(output.content, pdfPages));
+  /** Lo dibujado desde el teléfono sobre lo que está en pantalla (la pizarra, D-021). */
+  let liveLayer = $derived(layerKey(output.content));
+  let liveDrawn = $derived(strokesOf(liveLayer).length > 0);
+
+  /** Quitar lo dibujado encima de lo que está en pantalla. */
+  function wipeLive() {
+    if (liveLayer) platform.remoteBoardOp({ type: "wipe", layer: liveLayer }).catch(() => {});
+  }
 
   function baseName(path: string): string {
     return path.split(/[\\/]/).pop() ?? path;
@@ -72,6 +82,7 @@
       case "video": return t(content.paused ? "describe.videoPaused" : "describe.video", { name: baseName(content.path) });
       case "pdf": return t("describe.pdf", { name: baseName(content.path), n: content.page });
       case "clock": return t("describe.clock");
+      case "board": return t("describe.board", { n: sheetNumber(content.sheet) || 1 });
       case "timer": {
         const timer = t(content.endsAt === null ? "describe.timerPaused" : "describe.timer", { time: formatCountdown(content.durationMs) });
         return content.label ? `${timer} · ${content.label}` : timer;
@@ -265,6 +276,8 @@
       case "setBible": return chooseBible(command.id);
       case "planItem": return showPlanItem(command.id);
       case "goTo": return goLive(command.n);
+      // Una hoja de la pizarra: va directo, como una página (D-021).
+      case "showSheet": return sendPrepared({ kind: "board", sheet: command.id });
       case "show": {
         // Lo preparado o algo que estuvo en pantalla (la presentación en la página donde quedó). Ya se confirmó en el teléfono.
         const content = findItem(command.key, prepared);
@@ -343,6 +356,7 @@
     const unlistenNavigate = platform.onOutputNavigate(stepLive);
     const unlistenRemote = platform.onRemoteCommand(onRemoteCommand);
     const stopWatchingClients = watchRemoteClients();
+    watchBoard();
     const timer = setInterval(refreshMonitors, MONITOR_POLL_MS);
     return () => {
       clearInterval(timer);
@@ -546,6 +560,9 @@
         {/if}
 
         <div class="quick">
+          {#if liveDrawn}
+            <button class="btn" onclick={wipeLive}>{t("live.wipeDrawing")}</button>
+          {/if}
           {#if output.content.kind === "timer"}
             <button class="btn" onclick={() => changeTimer("toggle")} disabled={busy}>
               {t(output.content.endsAt === null ? "live.timerResume" : "live.timerPause")}

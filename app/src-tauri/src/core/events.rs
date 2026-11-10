@@ -19,3 +19,6 @@ pub const REMOTE_COMMAND_EVENT: &str = "remote-command";
 
 /// Cuántos teléfonos están conectados al control remoto.
 pub const REMOTE_CLIENTS_EVENT: &str = "remote-clients";
+
+/// Cambios en la pizarra del control remoto, para la consola y la salida (remote/board.rs).
+pub const REMOTE_BOARD_EVENT: &str = "remote-board";

@@ -1,5 +1,6 @@
 // Tipos compartidos entre la interfaz y el backend. No dependen de Tauri (ver D-010).
 import type { RemoteCommand } from "$lib/features/remote/protocol";
+import type { Board, BoardMessage, BoardOp, ScreenLayout } from "$lib/features/remote/board";
 
 export interface MonitorInfo {
   index: number;
@@ -48,7 +49,9 @@ export type OutputContent =
       label?: string;
       /** Imagen o GIF propio de esta cuenta; tapa el fondo general. */
       background?: string | null;
-    };
+    }
+  /** Una hoja de la pizarra del control remoto (features/remote/board.ts). */
+  | { kind: "board"; sheet: string };
 
 export interface ScriptureVerse {
   reference: string;
@@ -382,6 +385,13 @@ export interface Platform {
   remoteThumb(doc: string, page: number, jpeg: Uint8Array): Promise<boolean>;
   onRemoteCommand(handler: (command: RemoteCommand) => void): Promise<() => void>;
   onRemoteClients(handler: (count: number) => void): Promise<() => void>;
+  /** La pizarra entera: hojas y lo dibujado (features/remote/board.ts). */
+  remoteBoard(): Promise<Board>;
+  /** Un cambio en la pizarra desde la consola. false si no es válido. */
+  remoteBoardOp(op: BoardOp): Promise<boolean>;
+  /** La ventana de salida cuenta cómo es la pantalla y dónde quedó el texto, para dibujar encima desde el teléfono. */
+  remoteScreen(screen: ScreenLayout | null): Promise<void>;
+  onRemoteBoard(handler: (message: BoardMessage) => void): Promise<() => void>;
 
   // Importar y exportar letras (features/transfer)
   /** Elige un .selah o .hpls y devuelve la vista previa; null si se cancela. No guarda nada. */

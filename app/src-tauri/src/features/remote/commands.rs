@@ -7,6 +7,7 @@ use tauri::ipc::{InvokeBody, Request};
 use tauri::{AppHandle, State};
 use tokio::sync::watch;
 
+use super::board::Op;
 use super::domain::url;
 use super::server::{self, Shared};
 use super::{save_key, RemoteState, Running};
@@ -58,6 +59,7 @@ pub async fn remote_start(app: AppHandle, state: State<'_, RemoteState>) -> Resu
         clients: state.clients.clone(),
         thumbs: state.thumbs.clone(),
         thumbs_added: state.thumbs_added.subscribe(),
+        board: state.board.clone(),
     };
     let port = server::start(shared).await.map_err(|e| CommandError::RemoteFailed { reason: e.to_string() })?;
     let mut running = state.running.lock().unwrap();
@@ -69,9 +71,11 @@ pub async fn remote_start(app: AppHandle, state: State<'_, RemoteState>) -> Resu
 }
 
 #[tauri::command]
-pub fn remote_stop(state: State<'_, RemoteState>) -> RemoteInfo {
-    // Soltar `stop` apaga el servidor y desconecta los teléfonos.
-    state.running.lock().unwrap().take();
+pub fn remote_stop(app: AppHandle, state: State<'_, RemoteState>) -> RemoteInfo {
+    // Soltar `stop` apaga el servidor y desconecta los teléfonos. La pizarra dura lo que dura el control remoto.
+    if state.running.lock().unwrap().take().is_some() {
+        state.board.reset(&app);
+    }
     info(&state)
 }
 
@@ -108,4 +112,28 @@ pub fn remote_thumb(state: State<'_, RemoteState>, request: Request<'_>) -> bool
         state.thumbs_added.send_modify(|n| *n = n.wrapping_add(1));
     }
     saved
+}
+
+/// La pizarra entera (board.rs), para la consola y la salida al abrirse.
+#[tauri::command]
+pub fn remote_board(state: State<'_, RemoteState>) -> serde_json::Value {
+    state.board.board()
+}
+
+/// Un cambio en la pizarra desde la consola (quitar lo dibujado). Se reparte igual que los del teléfono.
+#[tauri::command]
+pub fn remote_board_op(app: AppHandle, state: State<'_, RemoteState>, op: serde_json::Value) -> bool {
+    match Op::parse(&op.to_string()) {
+        Some(op) => {
+            state.board.apply(&app, op);
+            true
+        }
+        None => false,
+    }
+}
+
+/// La ventana de salida cuenta cómo es la pantalla y dónde quedó cada palabra, para dibujar encima desde el teléfono.
+#[tauri::command]
+pub fn remote_screen(state: State<'_, RemoteState>, screen: Option<serde_json::Value>) {
+    state.board.set_screen(screen);
 }

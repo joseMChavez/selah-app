@@ -1,5 +1,6 @@
 // Lo que se dicen el teléfono y la consola a través del servidor del control remoto (src-tauri/src/features/remote).
 // Este archivo no importa nada de Tauri: lo usa también la página del teléfono, que corre en un navegador.
+import type { BoardMessage } from "./board";
 
 /** Órdenes del teléfono. Deben coincidir con `domain::Command` del backend. */
 export type RemoteCommand =
@@ -13,7 +14,9 @@ export type RemoteCommand =
   /** Un elemento del plan abierto en la consola, por su id. */
   | { type: "planItem"; id: string }
   /** Ir a la posición n (desde 1) de lo que está en pantalla: página, diapositiva o versículo. */
-  | { type: "goTo"; n: number };
+  | { type: "goTo"; n: number }
+  /** Poner en pantalla una hoja de la pizarra (board.ts). */
+  | { type: "showSheet"; id: string };
 
 /** Algo que se puede volver a poner en pantalla desde el teléfono: lo preparado en la consola o lo reciente. */
 export interface RemoteItem {
@@ -60,6 +63,8 @@ export type RemoteLive =
   | { kind: "scripture"; reference: string; text: string; version: string }
   | { kind: "pdf"; name: string }
   | { kind: "text"; text: string }
+  /** Una hoja de la pizarra. */
+  | { kind: "board"; sheet: string }
   /** Imagen, video, reloj…: el teléfono muestra la descripción de la consola. */
   | { kind: "other"; description: string };
 
@@ -78,6 +83,8 @@ export interface RemoteStatus {
   items: RemoteItem[];
   /** Para ver y elegir dentro de lo que está en pantalla; null si no hay nada que elegir. */
   strip: RemoteStrip | null;
+  /** Sobre qué se dibuja en la pizarra ahora; null si no se puede (pantalla vacía o en negro). */
+  canvas: RemoteCanvas | null;
   /** El plan abierto en la consola; null si no hay. */
   plan: RemotePlan | null;
   /** Las versiones que se pueden elegir. */
@@ -92,8 +99,21 @@ export interface RemoteStatus {
   } | null;
 }
 
-/** Mensaje del servidor al teléfono. `status` es null hasta que la consola publica por primera vez. */
-export interface ServerMessage {
-  type: "status";
-  status: RemoteStatus | null;
+/** Lo que está en pantalla, para dibujar encima: la capa de sus trazos y qué poner de fondo en el teléfono. */
+export interface RemoteCanvas {
+  /** La capa (board.ts, layerKey). */
+  layer: string;
+  under:
+    /** Una hoja de la pizarra: su fondo está en la pizarra. */
+    | { kind: "sheet"; id: string }
+    /** Una página de PDF: la miniatura de /api/thumb. */
+    | { kind: "page"; doc: string; n: number }
+    /** Texto o versículo: dónde quedó cada palabra llega en la pizarra (screen), medido por la ventana de salida. */
+    | { kind: "text"; text: string }
+    /** Imagen, video, reloj…: solo se describe. */
+    | { kind: "other"; description: string };
 }
+
+/** Mensaje del servidor al teléfono. `status` es null hasta que la consola publica por primera vez.
+ *  Los de la pizarra (board.ts) llegan por el mismo WebSocket. */
+export type ServerMessage = { type: "status"; status: RemoteStatus | null } | BoardMessage;

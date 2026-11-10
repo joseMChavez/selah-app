@@ -7,6 +7,8 @@
   import { i18n, t, type MessageKey } from "$lib/i18n/index.svelte";
   import type { Verse } from "$lib/platform";
   import type { RemoteCommand, RemoteStatus, ServerMessage } from "./protocol";
+  import BoardPad from "./BoardPad.svelte";
+  import { applyMessage, applyOp, emptyBoard, type Board, type BoardOp } from "./board";
 
   const KEY_STORAGE = "selah-remote-key";
   const RETRY_MS = [1000, 2000, 3000, 5000];
@@ -35,6 +37,12 @@
   let undoTimer: ReturnType<typeof setTimeout> | undefined;
   /** Reintentos de cada miniatura que aún no estaba lista (la consola las dibuja poco a poco). */
   let thumbTries = $state<Record<number, number>>({});
+  /** La pizarra (D-021). Los trazos no son reactivos (miles de números): `boardVersion` avisa de cada cambio. */
+  let board = $state.raw<Board>(emptyBoard());
+  let boardVersion = $state(0);
+  let drawing = $state(false);
+  /** Trazos dibujados aquí: ya están completos en este teléfono, su eco del servidor llegaría con retraso. */
+  const ownStrokes = new Set<string>();
 
   /** Abierta como app instalada (pantalla de inicio): ya ocupa toda la pantalla. */
   const installed = matchMedia("(display-mode: fullscreen), (display-mode: standalone)").matches || (navigator as { standalone?: boolean }).standalone === true;
@@ -89,7 +97,12 @@
     ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data) as ServerMessage;
-        if (message.type === "status") status = message.status;
+        if (message.type === "status") {
+          status = message.status;
+        } else if (!(message.type === "op" && message.op.type === "draw" && ownStrokes.has(message.op.stroke))) {
+          board = applyMessage(board, message);
+          boardVersion++;
+        }
       } catch {
         // Un mensaje que no se entiende (versión más nueva de Selah) se ignora.
       }
@@ -119,6 +132,20 @@
   function command(c: RemoteCommand) {
     if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(c));
     if (c.type !== "goTo") clearUndo();
+  }
+
+  /** Un cambio en la pizarra: se ve aquí enseguida y se manda al servidor, que lo reparte. */
+  function act(op: BoardOp) {
+    if (socket?.readyState !== WebSocket.OPEN) return;
+    if (op.type === "draw") ownStrokes.add(op.stroke);
+    applyOp(board, op);
+    boardVersion++;
+    socket.send(JSON.stringify(op));
+  }
+
+  function sheetNumber(id: string): number {
+    void boardVersion;
+    return board.sheets.findIndex((s) => s.id === id) + 1 || 1;
   }
 
   function clearUndo() {
@@ -229,6 +256,7 @@
       case "other": return live.description;
       case "black": return t("describe.black");
       case "empty": return t("describe.empty");
+      case "board": return t("remote.board.sheet", { n: sheetNumber(live.sheet) });
     }
   }
 
@@ -334,6 +362,11 @@
       <div class="live-head">
         <h2>{t("remote.onScreen")}</h2>
         {#if position}<span class="muted small">{positionLabel()}</span>{/if}
+        <!-- Dibujar sobre lo que está en pantalla, o en una hoja en blanco (D-021). -->
+        <button class="btn board-open" onclick={() => (drawing = true)} disabled={connection !== "open" || !status}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1-4L16 5l3 3L8 19l-4 1ZM14 7l3 3" /></svg>
+          {t("remote.board.title")}
+        </button>
       </div>
       {#if !status}
         <p class="muted">{t("remote.waiting")}</p>
@@ -359,6 +392,8 @@
           <p class="ref">{live.description}</p>
         {:else if live.kind === "black"}
           <div class="screen black"><span>{t("remote.black")}</span></div>
+        {:else if live.kind === "board"}
+          <p class="ref">{t("remote.board.sheet", { n: sheetNumber(live.sheet) })}</p>
         {:else}
           <p class="muted">{t("describe.empty")}</p>
         {/if}
@@ -516,6 +551,20 @@
   {/if}
 </div>
 
+{#if drawing && status}
+  <BoardPad
+    {status}
+    {board}
+    version={boardVersion}
+    online={connection === "open"}
+    summary={summary()}
+    thumbUrl={(doc, n) => `/api/thumb?${new URLSearchParams({ key: key ?? "", doc, n: String(n) })}`}
+    {act}
+    {command}
+    onclose={() => (drawing = false)}
+  />
+{/if}
+
 {#if asking}
   {@const request = asking}
   <div class="backdrop" role="presentation" onclick={() => (asking = null)}>
@@ -563,7 +612,10 @@
   .notice { padding: 10px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--warn-text); }
   .card { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
   h2 { font-size: 15px; margin: 0; }
-  .live-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .live-head { display: flex; align-items: center; gap: 8px; }
+  .live-head h2 { flex: 1; }
+  .board-open { min-height: 40px; gap: 6px; padding: 0 12px; font-size: 14px; }
+  .board-open svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
   .ref { font-weight: 700; margin: 0; }
   .text { margin: 0; line-height: 1.45; white-space: pre-line; }
   .search { display: flex; gap: 8px; }

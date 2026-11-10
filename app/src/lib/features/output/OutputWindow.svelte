@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import OutputView, { DEFAULT_STYLE } from "$lib/features/output/OutputView.svelte";
+  import OutputView, { backgroundColor, DEFAULT_STYLE } from "$lib/features/output/OutputView.svelte";
+  import { layerKey, type ScreenLayout, type ScreenWord } from "$lib/features/remote/board";
   import { platform, type OutputContent, type OutputStyle } from "$lib/platform";
   import { t } from "$lib/i18n/index.svelte";
 
@@ -20,6 +21,22 @@
     if (!forward && !back) return;
     event.preventDefault();
     platform.outputNavigate(forward).catch(() => {});
+  }
+
+  let lastScreen = "";
+
+  /** Para la pizarra del teléfono: cómo es esta pantalla y dónde quedó cada palabra del texto. */
+  function reportScreen(words: ScreenWord[]) {
+    const screen: ScreenLayout = {
+      aspect: innerHeight > 0 ? Math.round((innerWidth / innerHeight) * 1000) / 1000 : 16 / 9,
+      layer: layerKey(content),
+      paper: backgroundColor(style),
+      words,
+    };
+    const json = JSON.stringify(screen);
+    if (json === lastScreen) return;
+    lastScreen = json;
+    platform.remoteScreen(screen).catch(() => {});
   }
 
   function measure() {
@@ -44,7 +61,7 @@
 <svelte:window onresize={measure} onkeydown={onKeydown} />
 
 <div class="output">
-  <OutputView {content} {style} diagnostics={size} onerror={(message) => platform.reportOutputError(message)} />
+  <OutputView {content} {style} diagnostics={size} onerror={(message) => platform.reportOutputError(message)} onscreen={reportScreen} />
 </div>
 
 <style>

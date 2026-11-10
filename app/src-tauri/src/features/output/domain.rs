@@ -59,6 +59,10 @@ pub enum OutputContent {
         #[serde(default)]
         background: Option<String>,
     },
+    /// Una hoja de la pizarra del control remoto (remote/board.rs): su fondo y lo dibujado viven allí.
+    Board {
+        sheet: String,
+    },
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -238,6 +242,7 @@ mod tests {
         for json in [
             r#"{"kind":"timer","durationMs":60000,"endsAt":null,"remainingMs":60000,"label":"Receso","background":null}"#,
             r#"{"kind":"clock","hour12":true,"seconds":false}"#,
+            r#"{"kind":"board","sheet":"h1"}"#,
             r#"{"kind":"text","slides":["a"],"index":0,"credit":"c","background":null}"#,
             r#"{"kind":"scripture","verses":[{"reference":"Jn 3:16","text":"t","second":{"reference":"Jn 3:16","text":"t"}}],"index":0,"version":"V","copyright":"","second":{"version":"W","copyright":""}}"#,
         ] {

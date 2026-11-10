@@ -25,6 +25,8 @@ pub enum Command {
     PlanItem { id: String },
     /// Ir a la posición n (desde 1) de lo que está en pantalla: página, diapositiva o versículo.
     GoTo { n: u32 },
+    /// Poner en pantalla una hoja de la pizarra (board.rs), por su id.
+    ShowSheet { id: String },
 }
 
 /// Más largo que esto no es un id ni una clave de la consola.
@@ -47,6 +49,7 @@ impl Command {
             Command::Show { key } => !key.is_empty() && key.len() <= MAX_TEXT,
             Command::PlanItem { id } => !id.is_empty() && id.len() <= MAX_TEXT,
             Command::GoTo { n } => (1..=10_000).contains(n),
+            Command::ShowSheet { id } => !id.is_empty() && id.len() <= 64,
             _ => true,
         }
     }
@@ -115,6 +118,8 @@ mod tests {
         assert_eq!(Command::parse(r#"{"type":"goTo","n":12}"#), Some(Command::GoTo { n: 12 }));
         assert_eq!(Command::parse(r#"{"type":"goTo","n":0}"#), None);
         assert_eq!(Command::parse(r#"{"type":"goTo","n":-1}"#), None);
+        assert_eq!(Command::parse(r#"{"type":"showSheet","id":"h1"}"#), Some(Command::ShowSheet { id: "h1".into() }));
+        assert_eq!(Command::parse(r#"{"type":"showSheet","id":""}"#), None);
         assert_eq!(Command::parse(r#"{"type":"setBible","id":""}"#), None);
         assert_eq!(Command::parse(&format!(r#"{{"type":"show","key":"{}"}}"#, "x".repeat(600))), None);
     }

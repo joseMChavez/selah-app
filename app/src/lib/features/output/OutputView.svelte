@@ -19,6 +19,47 @@
     navy: "#0b1730",
     charcoal: "#1d1f22",
   };
+
+  /** Color de fondo de la pantalla con este estilo. */
+  export function backgroundColor(style: OutputStyle): string {
+    return BACKGROUNDS[style.background];
+  }
+
+  /** Más palabras que esto no se miden: un texto así no cabe en pantalla de todos modos. */
+  const MAX_WORDS = 600;
+
+  /** Dónde quedó cada palabra del texto, entre 0 y COORD sobre la pantalla entera (para la pizarra del teléfono). */
+  function measureWords(view: HTMLElement, body: HTMLElement): ScreenWord[] {
+    const box = view.getBoundingClientRect();
+    if (box.width === 0 || box.height === 0) return [];
+    const scale = (value: number, size: number) => Math.round((value / size) * COORD);
+    const words: ScreenWord[] = [];
+    const range = document.createRange();
+    const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const p = node.parentElement?.closest("p");
+      const k = p?.classList.contains("reference") ? "ref" : p?.classList.contains("second") ? "second" : "text";
+      for (const match of (node.textContent ?? "").matchAll(/\S+/gu)) {
+        range.setStart(node, match.index);
+        range.setEnd(node, match.index + match[0].length);
+        // Al empezar una línea, el navegador añade una caja vacía al final de la anterior; y una palabra muy larga
+        // partida en dos tiene dos cajas. Vale la más ancha.
+        let rect: DOMRect | null = null;
+        for (const r of range.getClientRects()) if (!rect || r.width > rect.width) rect = r;
+        if (!rect || rect.width === 0) continue;
+        words.push({
+          t: match[0],
+          x: scale(rect.left - box.left, box.width),
+          y: scale(rect.top - box.top, box.height),
+          w: scale(rect.width, box.width),
+          h: scale(rect.height, box.height),
+          k,
+        });
+        if (words.length >= MAX_WORDS) return words;
+      }
+    }
+    return words;
+  }
 </script>
 
 <script lang="ts">
@@ -29,6 +70,9 @@
   import { formatClock, formatCountdown, timerRemaining } from "$lib/features/clock/clock";
   import { fontFamily } from "$lib/features/output/fonts";
   import { i18n, t } from "$lib/i18n/index.svelte";
+  import BoardLayer from "$lib/features/remote/BoardLayer.svelte";
+  import { COORD, layerKey, PAPER_COLOR, type ScreenWord } from "$lib/features/remote/board";
+  import { sheetPaper } from "$lib/features/remote/board.svelte";
 
   let {
     content,
@@ -36,6 +80,7 @@
     diagnostics = "",
     preview = false,
     onerror,
+    onscreen,
   }: {
     content: OutputContent;
     style?: OutputStyle;
@@ -43,12 +88,15 @@
     /** En miniatura el video no se reproduce: evita decodificarlo dos veces y que suene en la consola. */
     preview?: boolean;
     onerror?: (message: string) => void;
+    /** La ventana de salida mide dónde quedó cada palabra, para que el teléfono dibuje justo encima. */
+    onscreen?: (words: ScreenWord[]) => void;
   } = $props();
 
   let video = $state<HTMLVideoElement>();
   let canvas = $state<HTMLCanvasElement>();
   let stage = $state<HTMLDivElement>();
   let body = $state<HTMLDivElement>();
+  let view = $state<HTMLDivElement>();
   let width = $state(0);
   let height = $state(0);
   let now = $state(Date.now());
@@ -92,8 +140,14 @@
   // Una letra o una cuenta atrás (la pausa de un plan) pueden traer la suya.
   // El logo va encima de todo menos de la pantalla en negro y del patrón de prueba.
   let logo = $derived(
-    style.logo?.image && content.kind !== "black" && content.kind !== "testPattern" ? platform.mediaUrl(style.logo.image) : null,
+    style.logo?.image && content.kind !== "black" && content.kind !== "testPattern" && content.kind !== "board"
+      ? platform.mediaUrl(style.logo.image)
+      : null,
   );
+
+  // Sobre una hoja de la pizarra, su fondo; si no, se dibuja encima de lo que haya (D-021).
+  let paper = $derived(content.kind === "board" ? sheetPaper(content.sheet) : null);
+  let layer = $derived(layerKey(content));
 
   let backdrop = $derived.by(() => {
     if (!lyric && !clock && content.kind !== "empty") return null;
@@ -150,6 +204,26 @@
     }
     body.style.fontSize = `${low}px`;
   });
+
+  // Después de ajustar el tamaño: dónde quedó cada palabra. Otra vez cuando cargan los tipos de letra.
+  $effect(() => {
+    void [lyric?.text, lyric?.reference, lyric?.second?.text, style.fontScale, style.position, style.align, style.font, width, height];
+    if (!onscreen) return;
+    if (!lyric || !body || !view) {
+      onscreen([]);
+      return;
+    }
+    let cancelled = false;
+    const measure = () => {
+      if (!cancelled && body && view) onscreen(measureWords(view, body));
+    };
+    const frame = requestAnimationFrame(measure);
+    document.fonts?.ready.then(() => requestAnimationFrame(measure));
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+    };
+  });
 </script>
 
 <div
@@ -158,10 +232,11 @@
   class:pattern={content.kind === "testPattern"}
   class:expired={clock?.expired}
   class:logo-bottom={logo !== null && style.logo.corner.startsWith("bottom")}
-  style:background-color={BACKGROUNDS[style.background]}
+  style:background-color={paper ? PAPER_COLOR[paper] : BACKGROUNDS[style.background]}
   style:font-family={fontFamily(style.font)}
   bind:clientWidth={width}
   bind:clientHeight={height}
+  bind:this={view}
 >
   {#if backdrop}
     <img class="backdrop" src={backdrop} alt="" />
@@ -209,6 +284,7 @@
     <p class="pattern-title">{t("pattern.title")}</p>
     {#if diagnostics}<p class="diag">{diagnostics}</p>{/if}
   {/if}
+  {#if layer}<BoardLayer {layer} {paper} />{/if}
   {#if logo}
     <img
       class="logo {style.logo.corner}"
