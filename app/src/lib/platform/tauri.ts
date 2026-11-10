@@ -3,6 +3,7 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { RemoteCommand } from "$lib/features/remote/protocol";
+import type { BoardMessage } from "$lib/features/remote/board";
 import type { OfficeProgress, OutputState, Platform, StoredSettings } from "./types";
 
 export const tauriPlatform: Platform = {
@@ -62,6 +63,10 @@ export const tauriPlatform: Platform = {
   remoteThumb: (doc, page, jpeg) => invoke("plugin:remote|remote_thumb", jpeg, { headers: { "x-doc": doc, "x-page": String(page) } }),
   onRemoteCommand: (handler) => listen<RemoteCommand>("remote-command", (event) => handler(event.payload)),
   onRemoteClients: (handler) => listen<number>("remote-clients", (event) => handler(event.payload)),
+  remoteBoard: () => invoke("plugin:remote|remote_board"),
+  remoteBoardOp: (op) => invoke("plugin:remote|remote_board_op", { op }),
+  remoteScreen: (screen) => invoke("plugin:remote|remote_screen", { screen }),
+  onRemoteBoard: (handler) => listen<BoardMessage>("remote-board", (event) => handler(event.payload)),
   transferImportPick: (title, filterName) => invoke("plugin:transfer|transfer_import_pick", { title, filterName }),
   transferImportApply: (onConflict, planName, importedSuffix) =>
     invoke("plugin:transfer|transfer_import_apply", { onConflict, planName, importedSuffix }),

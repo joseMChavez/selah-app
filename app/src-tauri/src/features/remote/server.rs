@@ -5,7 +5,8 @@
 //   GET /api/chapter     versículos de un capítulo, para elegir en el teléfono
 //   GET /api/thumb       miniatura de una página del PDF en pantalla (thumbs.rs)
 //   GET /remote.webmanifest?key=…   para instalarla como app (PWA); con una clave válida, la app abre ya vinculada
-//   GET /ws?key=…        WebSocket: el teléfono manda órdenes (domain::Command) y recibe lo que hay en pantalla
+//   GET /ws?key=…        WebSocket: el teléfono manda órdenes (domain::Command) y recibe lo que hay en pantalla;
+//                        también dibuja en la pizarra (board::Op) y recibe lo que dibujan los demás
 //
 // Todo lo que no es la página pide la clave. Las órdenes no se aplican aquí: se pasan a la consola.
 use std::net::{IpAddr, Ipv4Addr, UdpSocket};
@@ -22,10 +23,13 @@ use axum::{Json, Router};
 use serde::Deserialize;
 use tauri::{AppHandle, Emitter};
 use tokio::net::TcpListener;
+use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::watch;
 
+use super::board::Op;
 use super::domain::{same_key, Command, PORTS};
 use super::thumbs::{Lookup, Thumbs};
+use super::BoardHub;
 use crate::core::events::{MAIN_LABEL, REMOTE_CLIENTS_EVENT, REMOTE_COMMAND_EVENT};
 use crate::features::bible;
 
@@ -42,6 +46,7 @@ pub struct Shared {
     pub clients: Arc<AtomicUsize>,
     pub thumbs: Arc<Mutex<Thumbs>>,
     pub thumbs_added: watch::Receiver<u64>,
+    pub board: Arc<BoardHub>,
 }
 
 impl Shared {
@@ -119,16 +124,29 @@ async fn client(shared: Shared, mut socket: WebSocket) {
     let mut status = shared.status.clone();
     let mut key = shared.key.clone();
     let mut stop = shared.stop.clone();
+    // Antes de mandar la pizarra entera: así no se pierde nada de lo que se dibuje entretanto.
+    let mut board = shared.board.subscribe();
     let my_key = key.borrow_and_update().clone();
     shared.connected(1);
 
     let first = status.borrow_and_update().clone();
-    if socket.send(Message::Text(first.into())).await.is_ok() {
+    let sent = socket.send(Message::Text(first.into())).await.is_ok()
+        && socket.send(Message::Text(shared.board.snapshot().into())).await.is_ok();
+    if sent {
         loop {
             tokio::select! {
                 changed = status.changed() => {
                     if changed.is_err() { break; }
                     let text = status.borrow_and_update().clone();
+                    if socket.send(Message::Text(text.into())).await.is_err() { break; }
+                }
+                message = board.recv() => {
+                    let text = match message {
+                        Ok(text) => text,
+                        // Se quedó atrás (Wi‑Fi lento): la pizarra entera en vez de lo que se perdió.
+                        Err(RecvError::Lagged(_)) => shared.board.snapshot(),
+                        Err(RecvError::Closed) => break,
+                    };
                     if socket.send(Message::Text(text.into())).await.is_err() { break; }
                 }
                 changed = key.changed() => {
@@ -139,6 +157,8 @@ async fn client(shared: Shared, mut socket: WebSocket) {
                     Some(Ok(Message::Text(text))) => {
                         if let Some(command) = Command::parse(&text) {
                             let _ = shared.app.emit_to(MAIN_LABEL, REMOTE_COMMAND_EVENT, &command);
+                        } else if let Some(op) = Op::parse(&text) {
+                            shared.board.apply(&shared.app, op);
                         }
                     }
                     Some(Ok(Message::Close(_))) | Some(Err(_)) | None => break,

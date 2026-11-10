@@ -91,7 +91,8 @@ pub fn set_output_content(
         _ => None,
     };
     let empty_timer = matches!(content, OutputContent::Timer { duration_ms: 0, .. });
-    if empty_timer || deck_len.is_some_and(|(len, index)| index >= len) {
+    let no_sheet = matches!(&content, OutputContent::Board { sheet } if sheet.is_empty() || sheet.len() > 64);
+    if empty_timer || no_sheet || deck_len.is_some_and(|(len, index)| index >= len) {
         return Err(CommandError::InvalidContent);
     }
     if let Some(path) = content.media_path() {

@@ -10,7 +10,8 @@ import { platform, type OutputContent, type OutputState, type RemoteInfo } from 
 import { openPlan } from "$lib/features/plans/plans.svelte";
 import { detail, icon, problem, session, title } from "$lib/features/plans/items.svelte";
 import { pageCount, pageJpeg } from "$lib/features/output/pdf";
-import type { RemoteItem, RemoteLive, RemotePlan, RemoteStatus, RemoteStrip } from "./protocol";
+import type { RemoteCanvas, RemoteItem, RemoteLive, RemotePlan, RemoteStatus, RemoteStrip } from "./protocol";
+import { layerKey } from "./board";
 
 const MAX_ITEMS = 6;
 /** Ancho de las miniaturas para el teléfono: nítidas en la vista grande, ligeras para el Wi‑Fi. */
@@ -186,8 +187,32 @@ function liveOf(content: OutputContent, description: string): RemoteLive {
       return { kind: "pdf", name: content.path.split(/[\\/]/).pop() ?? content.path };
     case "text":
       return { kind: "text", text: content.slides[content.index] ?? "" };
+    case "board":
+      return { kind: "board", sheet: content.sheet };
     default:
       return { kind: "other", description };
+  }
+}
+
+/** Sobre qué dibuja el teléfono, y qué le sirve de fondo para apuntar. */
+function canvasOf(content: OutputContent, description: string): RemoteCanvas | null {
+  const layer = layerKey(content);
+  if (!layer) return null;
+  switch (content.kind) {
+    case "board":
+      return { layer, under: { kind: "sheet", id: content.sheet } };
+    case "pdf":
+      return thumbs.doc && thumbs.path === content.path
+        ? { layer, under: { kind: "page", doc: thumbs.doc, n: content.page } }
+        : { layer, under: { kind: "other", description } };
+    case "scripture": {
+      const verse = content.verses[content.index];
+      return { layer, under: { kind: "text", text: verse ? `${verse.text}\n${verse.reference}` : "" } };
+    }
+    case "text":
+      return { layer, under: { kind: "text", text: content.slides[content.index] ?? "" } };
+    default:
+      return { layer, under: { kind: "other", description } };
   }
 }
 
@@ -210,6 +235,7 @@ export function remoteStatus(
     confirmSend: settings.confirmSend,
     strip: stripOf(output.content, position?.total ?? null),
     items: items(output.content, prepared, describe),
+    canvas: canvasOf(output.content, description),
     plan: planOf(),
     bibles: visibleBibles().map((b) => ({ id: b.id, abbreviation: b.abbreviation, name: b.name })),
     bible: bible && { id: bible.id, abbreviation: bible.abbreviation, language: bookLanguage(bible), books: bible.books },

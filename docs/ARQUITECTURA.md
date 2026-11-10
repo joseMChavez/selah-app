@@ -40,7 +40,7 @@ src/
 | `settings` | Ajustes por clave | `repo.rs` |
 | `obs` | Transmisión con OBS | `client.rs` |
 | `transfer` | Importar y exportar letras (.selah, listas de Holyrics .hpls) | `domain.rs` (validar, repetidas, qué guardar), `formats/`, `repo.rs` |
-| `remote` | Control remoto desde el teléfono (D-018, D-020) | `domain.rs` (órdenes, clave), `server.rs` (HTTP y WebSocket), `thumbs.rs` (miniaturas del PDF en pantalla) |
+| `remote` | Control remoto desde el teléfono (D-018, D-020, D-021) | `domain.rs` (órdenes, clave), `server.rs` (HTTP y WebSocket), `thumbs.rs` (miniaturas del PDF en pantalla), `board.rs` (pizarra) |
 
 ### Reglas
 
@@ -104,7 +104,7 @@ app/src/
       plans/  bible/  songs/  media/  clock/      panel + estado + index.ts
       output/            OutputView (lo que se dibuja en pantalla), OutputWindow, StylePanel, SlideStrip
       presentations/     descarga de LibreOffice
-      remote/            control remoto: protocol.ts (lo que se dicen teléfono y consola), RemoteApp (la página del teléfono, ruta /remote), RemoteSettings
+      remote/            control remoto: protocol.ts (lo que se dicen teléfono y consola), RemoteApp (la página del teléfono, ruta /remote), RemoteSettings; board.ts y BoardPad (pizarra), BoardLayer (lo dibujado en la salida)
       stream/            OBS
       settings/          vista de Ajustes
 ```
