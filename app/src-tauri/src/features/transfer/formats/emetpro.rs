@@ -184,6 +184,21 @@ mod tests {
         }
     }
 
+    /// Un .selah tal como lo escribía Selah 0.8.2, armado a mano: tiene que seguir importándose.
+    #[test]
+    fn lee_un_archivo_de_selah() {
+        let manifest = br#"{"format":"selah-songs","version":1,"exportedAt":1790000000,"app":"Selah 0.8.2","songs":[{"id":"x","title":"Admirable","singer":"","writer":"","slides":["Uno","Dos"]}],"setlist":["x"],"backgrounds":[]}"#;
+        let mut bytes = b"SELAHLTR".to_vec();
+        bytes.extend_from_slice(&1u16.to_le_bytes());
+        bytes.extend_from_slice(&(manifest.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(manifest);
+        assert!(is_package(&bytes));
+        let package = read(&bytes).unwrap();
+        assert_eq!(package.songs[0].title, "Admirable");
+        assert_eq!(package.songs[0].slides, ["Uno", "Dos"]);
+        assert_eq!(package.setlist, [0]);
+    }
+
     #[test]
     fn ida_y_vuelta() {
         let image = Background { name: "fondo.jpg".into(), bytes: vec![1, 2, 3, 4] };
