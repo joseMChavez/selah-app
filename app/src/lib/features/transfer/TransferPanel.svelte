@@ -5,7 +5,7 @@
   import { toMessage } from "$lib/core/messages";
   import { library, loadLibrary } from "$lib/features/songs/library.svelte";
   import { loadPlans, openPlan, plans } from "$lib/features/plans/plans.svelte";
-  import { t, type MessageKey } from "$lib/i18n/index.svelte";
+  import { t, tCount, type MessageKey } from "$lib/i18n/index.svelte";
   import { platform, type ImportPreview, type ImportResult, type OnConflict } from "$lib/platform";
 
   let { onerror }: PanelProps = $props();
@@ -120,7 +120,7 @@
             <summary>{t("transfer.fresh", { count: preview.fresh.length })}</summary>
             <ul>
               {#each preview.fresh as song, i (i)}
-                <li>{song.title}{#if song.singer}<span class="muted small"> · {song.singer}</span>{/if}<span class="muted small"> · {t("text.count", { count: song.slides })}</span></li>
+                <li>{song.title}{#if song.singer}<span class="muted small"> · {song.singer}</span>{/if}<span class="muted small"> · {tCount("text.count", song.slides)}</span></li>
               {/each}
             </ul>
           </details>

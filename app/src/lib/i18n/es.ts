@@ -60,6 +60,7 @@ const es = {
   "bible.noCopyright": "Este archivo no declara derechos de autor. Comprueba la licencia antes de usarlo.",
   "bible.chapterTitle": "{book} {chapter}",
   "text.count": "{count} diapositivas",
+  "text.countOne": "1 diapositiva",
 
   "text.label": "Texto",
   "text.hint": "Escribe ** (dos o más asteriscos) en una línea para empezar otra diapositiva.",

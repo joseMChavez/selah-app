@@ -61,6 +61,7 @@ const en: Record<MessageKey, string> = {
   "bible.noCopyright": "This file declares no copyright. Check the license before using it.",
   "bible.chapterTitle": "{book} {chapter}",
   "text.count": "{count} slides",
+  "text.countOne": "1 slide",
 
   "text.label": "Text",
   "text.hint": "Type ** (two or more asterisks) on a line to start another slide.",

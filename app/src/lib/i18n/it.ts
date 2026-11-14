@@ -61,6 +61,7 @@ const it: Record<MessageKey, string> = {
   "bible.noCopyright": "Questo file non dichiara diritti d'autore. Verifica la licenza prima di usarlo.",
   "bible.chapterTitle": "{book} {chapter}",
   "text.count": "{count} diapositive",
+  "text.countOne": "1 diapositiva",
 
   "text.label": "Testo",
   "text.hint": "Scrivi ** (due o più asterischi) su una riga per iniziare un'altra diapositiva.",

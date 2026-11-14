@@ -1,6 +1,6 @@
 // Cada elemento de un plan: cómo se llama, qué le falta y qué se pone en pantalla. Lo usan el panel Plan y la consola
 // (para el control remoto, que pide elementos del plan aunque el panel no esté a la vista).
-import { t } from "$lib/i18n/index.svelte";
+import { t, tCount } from "$lib/i18n/index.svelte";
 import { formatCountdown, preparedTimer } from "$lib/features/clock/clock";
 import { screenKey } from "$lib/features/output/history.svelte";
 import { library, songContent } from "$lib/features/songs/library.svelte";
@@ -55,7 +55,7 @@ export function detail(item: PlanItem): string {
   switch (item.kind) {
     case "song": {
       const song = songOf(item);
-      return song ? [song.singer, t("text.count", { count: splitSlides(song.body).length })].filter(Boolean).join(" · ") : "";
+      return song ? [song.singer, tCount("text.count", splitSlides(song.body).length)].filter(Boolean).join(" · ") : "";
     }
     case "media": return t(`kind.${item.media}`);
     case "scripture": {

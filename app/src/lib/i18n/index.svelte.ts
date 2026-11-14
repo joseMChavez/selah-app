@@ -39,4 +39,10 @@ export function t(key: MessageKey, params: Record<string, string | number> = {})
   return template.replace(/\{(\w+)\}/g, (match, name) => (name in params ? String(params[name]) : match));
 }
 
+/** Para textos con número: usa `<clave>One` cuando es 1 («1 diapositiva»), si existe; si no, la clave tal cual. */
+export function tCount(key: MessageKey, count: number): string {
+  const one = `${key}One`;
+  return t(count === 1 && one in es ? (one as MessageKey) : key, { count });
+}
+
 export type { MessageKey };
