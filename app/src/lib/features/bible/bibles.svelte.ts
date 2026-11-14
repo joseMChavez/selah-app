@@ -70,3 +70,21 @@ export async function removeAllBibles() {
   setSetting("bible", null);
   setSetting("bible2", null);
 }
+
+/** La versión de nombre `abbreviation`; si hay varias con ese nombre, la elegida. */
+export function bibleByAbbreviation(abbreviation: string): BibleInfo | null {
+  const available = visibleBibles().filter((b) => b.abbreviation === abbreviation);
+  return available.find((b) => b.id === settings.bible) ?? available[0] ?? null;
+}
+
+/** Vuelve a pantalla un versículo de otra versión (desde lo reciente, el plan o el teléfono): esa pasa a ser la
+ *  elegida, para que lo que se busque después salga en la misma versión. Con o sin la de abajo, como estaba. */
+export function followVersion(version: string, second: string | null) {
+  const bible = bibleByAbbreviation(version);
+  if (!bible) return;
+  const below = second ? bibleByAbbreviation(second) : null;
+  const { bible: current, second: currentSecond } = currentBibles();
+  if (current?.id === bible.id && (currentSecond?.id ?? null) === (below?.id ?? null)) return;
+  setSetting("bible", bible.id);
+  setSetting("bible2", below && below.id !== bible.id ? below.id : null);
+}

@@ -427,6 +427,8 @@ const es = {
   "remote.notInBible": "{reference} no está en esta Biblia.",
   "remote.items": "Para mostrar",
   "remote.version": "Versión de la Biblia",
+  "remote.wholeChapter": "Ver el capítulo entero ({n} versículos)",
+  "remote.lessChapter": "Ver menos",
   "remote.fullscreen": "Pantalla completa",
   "remote.exitFullscreen": "Salir de pantalla completa",
 

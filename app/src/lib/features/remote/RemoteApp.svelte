@@ -1,7 +1,7 @@
 <script lang="ts">
   // Página del control remoto, en el navegador del teléfono. No usa Tauri: habla con el servidor de Selah
   // por WebSocket (órdenes y estado) y por /api/chapter (versículos). La consola aplica cada orden.
-  import { onMount, tick } from "svelte";
+  import { onMount, tick, untrack } from "svelte";
   import { bookName, type BookLanguage } from "$lib/features/bible/books";
   import { parseQuery } from "$lib/features/bible/reference";
   import { i18n, t, type MessageKey } from "$lib/i18n/index.svelte";
@@ -15,12 +15,14 @@
   const FIRST_NEW_TESTAMENT_BOOK = 40;
   const UNDO_MS = 6000;
   const THUMB_RETRIES = 4;
+  /** Versículos a cada lado del que está en pantalla con la lista plegada. */
+  const AROUND = 2;
 
   type Connection = "connecting" | "open" | "offline" | "rejected" | "noKey";
   type Step =
     | { kind: "books" }
     | { kind: "chapters"; book: number }
-    | { kind: "verses"; book: number; chapter: number; verses: Verse[] };
+    | { kind: "verses"; bible: string; book: number; chapter: number; verses: Verse[] };
 
   const key = readKey();
   let connection = $state<Connection>(key ? "connecting" : "noKey");
@@ -31,6 +33,14 @@
   /** Lo que espera el «¿Seguro?»: un versículo o algo de «Para mostrar». */
   let asking = $state<{ title: string; text: string; command: RemoteCommand } | null>(null);
   let verseList = $state<HTMLOListElement>();
+  /** El capítulo entero a la vista; plegada, solo lo que rodea al versículo en pantalla. */
+  let expanded = $state(false);
+  /** Cada capítulo pedido lleva su número: si llega tarde (ya se pidió otro), no se muestra. */
+  let chapterRequest = 0;
+  /** El capítulo pedido que aún no llegó: cuenta como abierto (si no, otro estado lo pediría otra vez). */
+  let loadingChapter: { bible: string; book: number; chapter: number } | null = null;
+  /** El capítulo en pantalla que la lista ya siguió (Biblia|libro|capítulo). */
+  let followed: string | null = null;
   let stripList = $state<HTMLOListElement>();
   /** Tras saltar desde la tira: para volver a donde se estaba con un toque (deshacer en vez de preguntar). */
   let undo = $state<{ from: number; to: number; strip: string } | null>(null);
@@ -185,18 +195,27 @@
     return chapter ? `${bookName(book, language)} ${chapter}` : bookName(book, language);
   }
 
-  async function openChapter(book: number, chapter: number, verse?: number) {
+  /** Abre un capítulo de la versión elegida. `quiet`: lo abre la página sola (sigue a la pantalla o a otra versión),
+   *  sin mover la vista; si esa versión no lo tiene, vuelve a los libros sin avisar. */
+  async function openChapter(book: number, chapter: number, verse?: number, quiet = false) {
     if (!bible || !key) return;
+    const bibleId = bible.id;
+    const request = ++chapterRequest;
+    loadingChapter = { bible: bibleId, book, chapter };
     problem = null;
     try {
-      const params = new URLSearchParams({ key, bible: bible.id, book: String(book), chapter: String(chapter) });
+      const params = new URLSearchParams({ key, bible: bibleId, book: String(book), chapter: String(chapter) });
       const response = await fetch(`/api/chapter?${params}`);
+      if (request !== chapterRequest) return;
       if (!response.ok) {
-        problem = t("remote.notInBible", { reference: chapterTitle(book, chapter) });
+        if (quiet) step = { kind: "books" };
+        else problem = t("remote.notInBible", { reference: chapterTitle(book, chapter) });
         return;
       }
       const verses = (await response.json()) as Verse[];
-      step = { kind: "verses", book, chapter, verses };
+      if (request !== chapterRequest) return;
+      expanded = false;
+      step = { kind: "verses", bible: bibleId, book, chapter, verses };
       if (verse) {
         const found = verses.find((v) => v.number === verse);
         if (!found) {
@@ -206,12 +225,51 @@
         await tick();
         verseList?.querySelector(`[data-verse="${verse}"]`)?.scrollIntoView({ block: "center" });
         ask(book, chapter, found);
-      } else {
+      } else if (!quiet) {
         window.scrollTo({ top: 0 });
       }
     } catch {
-      problem = t("remote.offline");
+      if (request === chapterRequest) problem = t("remote.offline");
+    } finally {
+      if (request === chapterRequest) loadingChapter = null;
     }
+  }
+
+  // La lista sigue a lo que se lee: si llega a pantalla otro capítulo (o se vuelve a uno de otra versión, y la
+  // consola cambia a esa versión), se abre ese. Si cambia la versión, el capítulo abierto se recarga en la nueva.
+  // Mientras se elige capítulo de un libro no se interrumpe.
+  $effect(() => {
+    if (!bible) return;
+    const live = status?.live;
+    const place = live?.kind === "scripture" && live.bible === bible.id ? live.place : null;
+    const liveKey = place && `${bible.id}|${place.book}|${place.chapter}`;
+    const open = loadingChapter ?? (step.kind === "verses" ? step : null);
+    let target: { book: number; chapter: number } | null = null;
+    if (place && liveKey !== followed && step.kind !== "chapters") target = place;
+    else if (open && open.bible !== bible.id) target = open;
+    if (liveKey) followed = liveKey;
+    if (!target) return;
+    if (open && open.bible === bible.id && open.book === target.book && open.chapter === target.chapter) return;
+    const { book, chapter } = target;
+    untrack(() => openChapter(book, chapter, undefined, true));
+  });
+
+  /** El versículo en pantalla, si es de este capítulo y versión. */
+  let liveVerse = $derived.by(() => {
+    const live = status?.live;
+    if (step.kind !== "verses" || live?.kind !== "scripture" || !live.place || live.bible !== step.bible) return null;
+    return live.place.book === step.book && live.place.chapter === step.chapter ? live.place.verse : null;
+  });
+  let shownVerses = $derived(
+    step.kind !== "verses" ? [] : liveVerse !== null && !expanded ? step.verses.filter((v) => Math.abs(v.number - liveVerse!) <= AROUND) : step.verses,
+  );
+
+  async function toggleChapter() {
+    expanded = !expanded;
+    if (!expanded || liveVerse === null) return;
+    // Al desplegar, el que está en pantalla sigue a la vista.
+    await tick();
+    verseList?.querySelector(`[data-verse="${liveVerse}"]`)?.scrollIntoView({ block: "center" });
   }
 
   function search(event: SubmitEvent) {
@@ -239,10 +297,9 @@
     asking = null;
   }
 
+  /** La consola cambia de versión; lo abierto se recarga en la nueva al llegar su estado (el $effect de arriba). */
   function chooseBible(id: string) {
-    command({ type: "setBible", id });
-    // Lo abierto era de la otra versión: se vuelve a los libros (los números de capítulo pueden cambiar).
-    step = { kind: "books" };
+    if (id !== bible?.id) command({ type: "setBible", id });
   }
 
   /** Una línea con lo que está en pantalla, para la barra de abajo. */
@@ -473,14 +530,15 @@
 
     <section class="card bible">
       {#if status && status.bibles.length > 1 && bible}
-        <label class="version">
-          <span class="muted small">{t("remote.version")}</span>
-          <select class="field" value={bible.id} onchange={(e) => chooseBible(e.currentTarget.value)} disabled={connection !== "open"}>
-            {#each status.bibles as b (b.id)}
-              <option value={b.id}>{b.abbreviation} · {b.name}</option>
-            {/each}
-          </select>
-        </label>
+        <!-- Como en la consola: un botón por versión, marcada la elegida (cambia sola si vuelve a pantalla un
+             versículo de otra). -->
+        <div class="versions" role="group" aria-label={t("remote.version")}>
+          {#each status.bibles as b (b.id)}
+            <button class="version-chip" aria-pressed={b.id === bible.id} title={b.name} disabled={connection !== "open"} onclick={() => chooseBible(b.id)}>
+              {b.abbreviation}
+            </button>
+          {/each}
+        </div>
       {/if}
       <form class="search" onsubmit={search}>
         <input class="field" bind:value={query} placeholder={t("remote.searchPlaceholder")} enterkeyhint="go" autocomplete="off" disabled={!bible} />
@@ -516,17 +574,23 @@
         </div>
       {:else}
         {@const { book, chapter, verses } = step}
+        {@const folded = liveVerse !== null && shownVerses.length < verses.length}
         <div class="step-head">
           <button class="btn ghost" onclick={() => (step = { kind: "chapters", book })}>{t("remote.back")}</button>
           <h2>{chapterTitle(book, chapter)}</h2>
         </div>
         <ol class="verses" bind:this={verseList}>
-          {#each verses as v (v.number)}
-            <li data-verse={v.number} class:on-screen={liveReference === `${chapterTitle(book, chapter)}:${v.number}`}>
+          {#each shownVerses as v (v.number)}
+            <li data-verse={v.number} class:on-screen={liveVerse === v.number || liveReference === `${chapterTitle(book, chapter)}:${v.number}`}>
               <button onclick={() => ask(book, chapter, v)}><strong>{v.number}</strong> {v.text}</button>
             </li>
           {/each}
         </ol>
+        {#if folded || (expanded && liveVerse !== null)}
+          <button class="btn ghost more" onclick={toggleChapter}>
+            {folded ? t("remote.wholeChapter", { n: verses.length }) : t("remote.lessChapter")}
+          </button>
+        {/if}
       {/if}
     </section>
 
@@ -619,8 +683,23 @@
   .ref { font-weight: 700; margin: 0; }
   .text { margin: 0; line-height: 1.45; white-space: pre-line; }
   .search { display: flex; gap: 8px; }
-  .version { display: flex; flex-direction: column; gap: 4px; }
-  .version .field { font-size: 16px; }
+  .versions { display: flex; flex-wrap: wrap; gap: 6px; }
+  .version-chip {
+    min-height: 40px;
+    min-width: 52px;
+    padding: 0 12px;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .version-chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  .version-chip:disabled { opacity: 0.55; }
+  .more { align-self: center; }
   .items { display: flex; flex-direction: column; gap: 6px; }
   .item { justify-content: flex-start; gap: 8px; min-height: 52px; text-align: left; }
   .item .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -16,6 +16,7 @@
   import { setSetting, settings, storage } from "$lib/core/settings.svelte";
   import { setTheme, theme, type ThemeChoice } from "$lib/core/theme.svelte";
   import { loadScripture } from "$lib/features/bible/scripture";
+  import { followVersion } from "$lib/features/bible/bibles.svelte";
   import { bookName } from "$lib/features/bible/books";
   import { chooseBible, findItem, remote, remoteStatus, syncRemote, syncThumbs, watchRemoteClients } from "$lib/features/remote/console.svelte";
   import { rememberLive, resume } from "$lib/features/output/history.svelte";
@@ -291,6 +292,21 @@
   $effect(() => {
     const content = output.content;
     untrack(() => rememberLive(content));
+  });
+
+  // Si lo que vuelve a pantalla es un versículo de otra versión, la consola (y el teléfono) pasan a esa versión.
+  // Solo cuando llega a pantalla: elegir otra en el panel mientras sigue el mismo pasaje no se deshace.
+  let liveVersion: string | null = null;
+  $effect(() => {
+    const content = output.content;
+    if (content.kind !== "scripture") {
+      liveVersion = null;
+      return;
+    }
+    const version = `${content.version}\u0001${content.second?.version ?? ""}`;
+    if (version === liveVersion) return;
+    liveVersion = version;
+    untrack(() => followVersion(content.version, content.second?.version ?? null));
   });
 
   /** Un elemento del plan pedido desde el teléfono. Ya se confirmó allí, así que va directo a la pantalla. */

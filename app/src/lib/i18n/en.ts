@@ -428,6 +428,8 @@ const en: Record<MessageKey, string> = {
   "remote.notInBible": "{reference} isn’t in this Bible.",
   "remote.items": "Ready to show",
   "remote.version": "Bible version",
+  "remote.wholeChapter": "Show the whole chapter ({n} verses)",
+  "remote.lessChapter": "Show less",
   "remote.fullscreen": "Full screen",
   "remote.exitFullscreen": "Exit full screen",
 
