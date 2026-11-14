@@ -13,7 +13,7 @@ pub struct Incoming {
     pub singer: String,
     pub writer: String,
     pub slides: Vec<String>,
-    /// Índice en los fondos que trae el archivo (solo en .selah).
+    /// Índice en los fondos que trae el archivo (solo en .emetpro y .selah).
     pub background: Option<usize>,
 }
 

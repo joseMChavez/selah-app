@@ -78,8 +78,8 @@ pub fn url(host: &str, port: u16, key: &str) -> String {
 /// Manifiesto de la app del teléfono (PWA). A pantalla completa y en vertical, como una app.
 pub fn manifest(start_url: &str) -> String {
     serde_json::json!({
-        "name": "Selah · Control remoto",
-        "short_name": "Selah",
+        "name": "EmetPro · Control remoto",
+        "short_name": "EmetPro",
         "start_url": start_url,
         "scope": "/",
         "display": "fullscreen",

@@ -11,10 +11,10 @@
   let { projectionLive, onerror }: { projectionLive: OutputContent; onerror: (message: Message) => void } = $props();
 
   const PREVIEW_MS = 1000;
-  const SELAH_TEXT_SOURCE = "Selah · Texto";
+  const TEXT_SOURCE = "EmetPro · Texto";
   const STOP_CONFIRM_MS = 4000;
 
-  const selahLayouts: { scene: string; label: MessageKey }[] = [
+  const appLayouts: { scene: string; label: MessageKey }[] = [
     { scene: SCENES.camera, label: "stream.layout.camera" },
     { scene: SCENES.cameraText, label: "stream.layout.cameraText" },
     { scene: SCENES.wait, label: "stream.layout.wait" },
@@ -34,16 +34,16 @@
   let status = $derived(obs.status);
   let streaming = $derived(status?.streaming.active ?? false);
   let program = $derived(status?.programScene ?? null);
-  // Las escenas de Selah con su nombre traducido; el resto, tal como se llaman en OBS.
-  let selahScenes = $derived(selahLayouts.filter((l) => status?.scenes.includes(l.scene)));
-  let otherScenes = $derived((status?.scenes ?? []).filter((s) => !selahLayouts.some((l) => l.scene === s)));
+  // Las escenas de EmetPro con su nombre traducido; el resto, tal como se llaman en OBS.
+  let appScenes = $derived(appLayouts.filter((l) => status?.scenes.includes(l.scene)));
+  let otherScenes = $derived((status?.scenes ?? []).filter((s) => !appLayouts.some((l) => l.scene === s)));
   let sources = $derived(status?.textSources ?? []);
   let textSource = $derived(settings.obsTextSource);
   let source = $derived(
     textSource && sources.includes(textSource)
       ? textSource
-      : sources.includes(SELAH_TEXT_SOURCE)
-        ? SELAH_TEXT_SOURCE
+      : sources.includes(TEXT_SOURCE)
+        ? TEXT_SOURCE
         : (sources[0] ?? null),
   );
 
@@ -132,7 +132,7 @@
   });
 
   $effect(() => {
-    if (status?.selahReady && cameras.length === 0) loadCameras();
+    if (status?.emetproReady && cameras.length === 0) loadCameras();
   });
 
   onMount(() => {
@@ -196,10 +196,10 @@
           </div>
 
           <h3>{t("stream.layouts")}</h3>
-          {#if selahScenes.length > 0}
-            <p class="group muted small">{t("stream.scenes.selah")}</p>
+          {#if appScenes.length > 0}
+            <p class="group muted small">{t("stream.scenes.emetpro")}</p>
             <div class="layouts">
-              {#each selahScenes as layout (layout.scene)}
+              {#each appScenes as layout (layout.scene)}
                 <button class="layout" class:current={program === layout.scene} onclick={() => setScene(layout.scene)} disabled={busy}>
                   <span>{t(layout.label)}</span>
                   {#if program === layout.scene}<span class="small">● {t("stream.layout.current")}</span>{/if}
@@ -218,7 +218,7 @@
               {/each}
             </div>
           {/if}
-          {#if !status.selahReady}
+          {#if !status.emetproReady}
             <div class="optional">
               <p class="muted small">{t("stream.setup.scenesHint")}</p>
               <button class="btn" onclick={createScenes} disabled={busy}>{t("stream.setup.scenesOptional")}</button>

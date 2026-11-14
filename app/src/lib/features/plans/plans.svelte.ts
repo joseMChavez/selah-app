@@ -60,7 +60,7 @@ async function checkFiles(id: string | null) {
   }
 }
 
-/** Borra las copias de medios que ya no usa ningún plan (al abrir Selah y al borrar planes). */
+/** Borra las copias de medios que ya no usa ningún plan (al abrir EmetPro y al borrar planes). */
 export async function cleanFiles() {
   try {
     plans.filesBytes = await platform.plansCleanFiles();

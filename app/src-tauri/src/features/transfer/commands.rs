@@ -5,7 +5,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
 use super::domain::{plan, resolve, Incoming, Invalid, OnConflict};
-use super::formats::selah::{self, Background, Manifest, SongEntry};
+use super::formats::emetpro::{self, Background, Manifest, SongEntry, EXTENSION};
 use super::formats::holyrics;
 use super::{Pending, TransferState};
 use crate::core::assets::allow_media;
@@ -38,7 +38,7 @@ pub struct InvalidSong {
 #[serde(rename_all = "camelCase")]
 pub struct ImportPreview {
     file: String,
-    /// "selah" u "holyrics".
+    /// "emetpro" u "holyrics".
     format: &'static str,
     fresh: Vec<SongSummary>,
     /// Ya están en la biblioteca con la misma letra: no se tocan.
@@ -80,16 +80,16 @@ fn read_file(path: &Path) -> Result<Pending, String> {
     }
     let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
     let file = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    if selah::is_selah(&bytes) {
-        let package = selah::read(&bytes)?;
-        Ok(Pending { file, format: "selah", songs: package.songs, setlist: package.setlist, backgrounds: package.backgrounds })
+    if emetpro::is_package(&bytes) {
+        let package = emetpro::read(&bytes)?;
+        Ok(Pending { file, format: "emetpro", songs: package.songs, setlist: package.setlist, backgrounds: package.backgrounds })
     } else if holyrics::is_hpls(&bytes) {
         // Una lista de Holyrics es una lista del culto: todas sus canciones, en su orden.
         let songs = holyrics::read(&bytes)?;
         let setlist = (0..songs.len()).collect();
         Ok(Pending { file, format: "holyrics", songs, setlist, backgrounds: Vec::new() })
     } else {
-        Err("no es un archivo de letras de Selah (.selah) ni una lista de Holyrics (.hpls)".into())
+        Err("no es un archivo de letras de EmetPro (.emetpro, .selah) ni una lista de Holyrics (.hpls)".into())
     }
 }
 
@@ -104,7 +104,7 @@ pub async fn transfer_import_pick(
 ) -> Result<Option<ImportPreview>, CommandError> {
     let request = picker::Request {
         title,
-        filter: Some((filter_name, dialog_extensions(&[&["selah", "hpls"]]))),
+        filter: Some((filter_name, dialog_extensions(&[&["emetpro", "selah", "hpls"]]))),
         mode: picker::Mode::File,
     };
     let Some(path) = picker::pick(&app, request).await.map_err(internal)?.and_then(|p| p.into_iter().next()) else {
@@ -224,7 +224,7 @@ fn save_background(dir: &Path, background: &Background) -> Result<PathBuf, Strin
     Ok(path)
 }
 
-/// Exporta la biblioteca entera (o solo las letras de un plan, como lista del culto) a un .selah, con sus fondos.
+/// Exporta la biblioteca entera (o solo las letras de un plan, como lista del culto) a un .emetpro, con sus fondos.
 #[tauri::command]
 pub async fn transfer_export(
     app: AppHandle,
@@ -236,14 +236,14 @@ pub async fn transfer_export(
 ) -> Result<Option<ExportResult>, CommandError> {
     let request = picker::Request {
         title,
-        filter: Some((filter_name, dialog_extensions(&[&["selah"]]))),
+        filter: Some((filter_name, dialog_extensions(&[&[EXTENSION]]))),
         mode: picker::Mode::Save { name: file_name },
     };
     let Some(mut path) = picker::pick(&app, request).await.map_err(internal)?.and_then(|p| p.into_iter().next()) else {
         return Ok(None);
     };
-    if !path.extension().is_some_and(|e| e.eq_ignore_ascii_case("selah")) {
-        path.as_mut_os_string().push(".selah");
+    if !path.extension().is_some_and(|e| e.eq_ignore_ascii_case(EXTENSION)) {
+        path.as_mut_os_string().push(format!(".{EXTENSION}"));
     }
 
     let mut songs = with_store(&db, |store| store.songs())?;
@@ -289,14 +289,14 @@ pub async fn transfer_export(
         format: String::new(),
         version: 0,
         exported_at: now_secs(),
-        app: format!("Selah {}", env!("CARGO_PKG_VERSION")),
+        app: format!("EmetPro {}", env!("CARGO_PKG_VERSION")),
         songs: entries,
         setlist: setlist.into_iter().filter(|id| songs.iter().any(|s| &s.id == id)).collect(),
         backgrounds: Vec::new(),
     };
-    let bytes = selah::write(manifest, &backgrounds).map_err(export)?;
+    let bytes = emetpro::write(manifest, &backgrounds).map_err(export)?;
     // Se escribe aparte y se renombra al final: un corte a mitad no deja un archivo roto con el nombre bueno.
-    let partial = path.with_extension("selah.part");
+    let partial = path.with_extension(format!("{EXTENSION}.part"));
     std::fs::write(&partial, &bytes).map_err(|e| export(e.to_string()))?;
     std::fs::rename(&partial, &path).map_err(|e| export(e.to_string()))?;
     Ok(Some(ExportResult { path: path.to_string_lossy().into_owned(), songs: songs.len() }))

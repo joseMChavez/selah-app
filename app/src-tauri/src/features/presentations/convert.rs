@@ -1,6 +1,6 @@
 // Presentaciones (PowerPoint, Impress, Keynote) → PDF; luego se muestran como cualquier PDF.
 // Un webview no sabe dibujar un PPTX, así que se convierte con lo que haya en el equipo, en este orden:
-// LibreOffice (el del sistema o la copia privada de Selah, libreoffice.rs), que es el que mejor funciona;
+// LibreOffice (el del sistema o la copia privada de EmetPro, libreoffice.rs), que es el que mejor funciona;
 // luego PowerPoint (COM) en Windows, y Keynote y PowerPoint en macOS. Si uno falla se prueba el siguiente. La conversión se guarda en caché y se rehace si el archivo cambia.
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -33,8 +33,8 @@ $ErrorActionPreference = 'Stop'
 $app = New-Object -ComObject PowerPoint.Application
 try {
   # Open(archivo, solo lectura, sin título, sin ventana)
-  $pres = $app.Presentations.Open($env:SELAH_ORIGEN, -1, 0, 0)
-  try { $pres.SaveAs($env:SELAH_DESTINO, 32) } finally { $pres.Close() }
+  $pres = $app.Presentations.Open($env:EMETPRO_ORIGEN, -1, 0, 0)
+  try { $pres.SaveAs($env:EMETPRO_DESTINO, 32) } finally { $pres.Close() }
 } finally {
   if ($app.Presentations.Count -eq 0) { $app.Quit() }
   [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($app)
@@ -239,8 +239,8 @@ fn command_for(converter: &Converter, source: &Path, pdf: &Path, dir: &Path, cac
             let mut command = Command::new("powershell");
             command
                 .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", POWERPOINT_WINDOWS_SCRIPT])
-                .env("SELAH_ORIGEN", source)
-                .env("SELAH_DESTINO", pdf);
+                .env("EMETPRO_ORIGEN", source)
+                .env("EMETPRO_DESTINO", pdf);
             command
         }
         Converter::PowerPointMac => applescript(POWERPOINT_MAC_SCRIPT, source, pdf),
@@ -292,7 +292,7 @@ mod tests {
 
     #[test]
     fn url_de_perfil() {
-        assert_eq!(file_url(Path::new("/home/ana/.cache/selah/perfil")), "file:///home/ana/.cache/selah/perfil");
+        assert_eq!(file_url(Path::new("/home/ana/.cache/emetpro/perfil")), "file:///home/ana/.cache/emetpro/perfil");
         assert_eq!(file_url(Path::new("/home/ana maría/x")), "file:///home/ana%20mar%C3%ADa/x");
         assert_eq!(file_url(Path::new(r"C:\Users\Ana Pérez\x")), "file:///C:/Users/Ana%20P%C3%A9rez/x");
     }
@@ -306,8 +306,8 @@ mod tests {
 
         let windows = command_for(&Converter::PowerPointWindows, source, pdf, dir, dir);
         let envs: Vec<_> = windows.get_envs().collect();
-        assert!(envs.contains(&(std::ffi::OsStr::new("SELAH_ORIGEN"), Some(source.as_os_str()))));
-        assert!(envs.contains(&(std::ffi::OsStr::new("SELAH_DESTINO"), Some(pdf.as_os_str()))));
+        assert!(envs.contains(&(std::ffi::OsStr::new("EMETPRO_ORIGEN"), Some(source.as_os_str()))));
+        assert!(envs.contains(&(std::ffi::OsStr::new("EMETPRO_DESTINO"), Some(pdf.as_os_str()))));
         assert!(windows.get_args().all(|a| a != source.as_os_str()));
 
         for converter in [Converter::PowerPointMac, Converter::Keynote] {
@@ -336,7 +336,7 @@ mod tests {
     #[test]
     #[ignore]
     fn convierte_un_pptx() {
-        let dir = std::env::temp_dir().join(format!("selah-office-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("emetpro-office-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let page = |n: &str| format!(

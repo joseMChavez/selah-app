@@ -1,11 +1,11 @@
 <script lang="ts">
-  // Importar letras (de un .selah o de una lista de Holyrics) y exportar la biblioteca a un .selah.
+  // Importar letras (de un .emetpro o .selah, o de una lista de Holyrics) y exportar la biblioteca a un .emetpro.
   // Primero se ve qué va a entrar y se elige qué hacer con las repetidas; nada se guarda hasta confirmar.
   import type { PanelProps } from "$lib/core/panels";
   import { toMessage } from "$lib/core/messages";
   import { library, loadLibrary } from "$lib/features/songs/library.svelte";
   import { loadPlans, openPlan, plans } from "$lib/features/plans/plans.svelte";
-  import { t, type MessageKey } from "$lib/i18n/index.svelte";
+  import { t, tCount, type MessageKey } from "$lib/i18n/index.svelte";
   import { platform, type ImportPreview, type ImportResult, type OnConflict } from "$lib/platform";
 
   let { onerror }: PanelProps = $props();
@@ -84,7 +84,7 @@
     exported = null;
     const date = new Date().toISOString().slice(0, 10);
     const plan = plans.all.find((p) => p.id === planId);
-    const name = plan ? `${plan.name} ${plan.date ?? date}.selah` : `${t("transfer.fileLibrary")} ${date}.selah`;
+    const name = plan ? `${plan.name} ${plan.date ?? date}.emetpro` : `${t("transfer.fileLibrary")} ${date}.emetpro`;
     try {
       busy = true;
       exported = await platform.transferExport(t("transfer.exportTitle"), t("transfer.exportFilter"), name, planId);
@@ -112,7 +112,7 @@
       <div class="preview" aria-live="polite">
         <p class="file">
           <strong>{preview.file}</strong>
-          <span class="muted small">{t(preview.format === "holyrics" ? "transfer.formatHolyrics" : "transfer.formatSelah")}</span>
+          <span class="muted small">{t(preview.format === "holyrics" ? "transfer.formatHolyrics" : "transfer.formatEmetpro")}</span>
         </p>
 
         {#if preview.fresh.length > 0}
@@ -120,7 +120,7 @@
             <summary>{t("transfer.fresh", { count: preview.fresh.length })}</summary>
             <ul>
               {#each preview.fresh as song, i (i)}
-                <li>{song.title}{#if song.singer}<span class="muted small"> · {song.singer}</span>{/if}<span class="muted small"> · {t("text.count", { count: song.slides })}</span></li>
+                <li>{song.title}{#if song.singer}<span class="muted small"> · {song.singer}</span>{/if}<span class="muted small"> · {tCount("text.count", song.slides)}</span></li>
               {/each}
             </ul>
           </details>

@@ -1,5 +1,5 @@
 // Biblias disponibles, compartidas por el panel de la Biblia y la vista de Ajustes.
-// Las importadas se pueden quitar (se borra la copia de Selah, no el archivo original);
+// Las importadas se pueden quitar (se borra la copia de EmetPro, no el archivo original);
 // las incluidas en la instalación no se borran: se ocultan, y Ajustes puede volver a mostrarlas.
 import { platform, type BibleInfo } from "$lib/platform";
 import { setSetting, settings } from "$lib/core/settings.svelte";
@@ -44,7 +44,7 @@ export async function importBibles(title: string, filterName: string): Promise<B
   return imported;
 }
 
-/** Quita una importada de Selah, u oculta una incluida. Deja de estar elegida si lo estaba. */
+/** Quita una importada de EmetPro, u oculta una incluida. Deja de estar elegida si lo estaba. */
 export async function removeBible(bible: BibleInfo) {
   if (bible.builtin) setSetting("hiddenBibles", [...settings.hiddenBibles, bible.id]);
   else {

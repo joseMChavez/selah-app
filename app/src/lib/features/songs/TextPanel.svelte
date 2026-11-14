@@ -1,7 +1,7 @@
 <script lang="ts">
   // Textos: una biblioteca de letras guardadas y el texto libre de siempre. Lo que se presenta en un culto,
   // en orden, va en un plan (features/plans).
-  import { t } from "$lib/i18n/index.svelte";
+  import { t, tCount } from "$lib/i18n/index.svelte";
   import { addToOpenPlan, openPlan } from "$lib/features/plans/plans.svelte";
   import {
     allowedBackgrounds,
@@ -166,7 +166,7 @@
       </label>
       <p class="muted small">
         {t("songs.hint")}
-        {#if editingSlides.length > 0}· {t("text.count", { count: editingSlides.length })}{/if}
+        {#if editingSlides.length > 0}· {tCount("text.count", editingSlides.length)}{/if}
       </p>
       <div class="row">
         <span class="label">{t("songs.background")}</span>
@@ -200,7 +200,7 @@
             <button class="item" onclick={() => prepareSong(song)}>
               <span class="name">
                 {song.title}
-                <span class="muted small sub">{[song.singer, t("text.count", { count: splitSlides(song.body).length })].filter(Boolean).join(" · ")}</span>
+                <span class="muted small sub">{[song.singer, tCount("text.count", splitSlides(song.body).length)].filter(Boolean).join(" · ")}</span>
               </span>
             </button>
             {#if openPlan.id}
@@ -221,7 +221,7 @@
     <textarea id="text-draft" class="field free" bind:value={draft} oninput={updateFree} onfocus={updateFree} rows="12"></textarea>
     <p class="muted small">
       {t("text.hint")}
-      {#if slides.length > 1}· {t("text.count", { count: slides.length })}{/if}
+      {#if slides.length > 1}· {tCount("text.count", slides.length)}{/if}
     </p>
   {/if}
 </div>

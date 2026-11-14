@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Página del control remoto, en el navegador del teléfono. No usa Tauri: habla con el servidor de Selah
+  // Página del control remoto, en el navegador del teléfono. No usa Tauri: habla con el servidor de EmetPro
   // por WebSocket (órdenes y estado) y por /api/chapter (versículos). La consola aplica cada orden.
   import { onMount, tick, untrack } from "svelte";
   import { bookName, type BookLanguage } from "$lib/features/bible/books";
@@ -10,7 +10,9 @@
   import BoardPad from "./BoardPad.svelte";
   import { applyMessage, applyOp, emptyBoard, type Board, type BoardOp } from "./board";
 
-  const KEY_STORAGE = "selah-remote-key";
+  const KEY_STORAGE = "emetpro-remote-key";
+  /** Donde la guardaba la app cuando se llamaba Selah: así un teléfono ya emparejado no tiene que volver a escanear. */
+  const LEGACY_KEY_STORAGE = "selah-remote-key";
   const RETRY_MS = [1000, 2000, 3000, 5000];
   const FIRST_NEW_TESTAMENT_BOOK = 40;
   const UNDO_MS = 6000;
@@ -80,7 +82,7 @@
     const fromUrl = new URLSearchParams(location.search).get("key");
     try {
       if (fromUrl) localStorage.setItem(KEY_STORAGE, fromUrl);
-      return fromUrl ?? localStorage.getItem(KEY_STORAGE);
+      return fromUrl ?? localStorage.getItem(KEY_STORAGE) ?? localStorage.getItem(LEGACY_KEY_STORAGE);
     } catch {
       return fromUrl;
     }
@@ -114,7 +116,7 @@
           boardVersion++;
         }
       } catch {
-        // Un mensaje que no se entiende (versión más nueva de Selah) se ignora.
+        // Un mensaje que no se entiende (versión más nueva de EmetPro) se ignora.
       }
     };
     ws.onclose = async () => {
@@ -381,20 +383,20 @@
 </script>
 
 <svelte:head>
-  <title>Selah · {t("remote.title")}</title>
+  <title>EmetPro · {t("remote.title")}</title>
   <!-- Instalable en la pantalla de inicio. El manifiesto lleva la clave para que la app abra ya vinculada. -->
   <link rel="manifest" href={`/remote.webmanifest${key ? `?key=${encodeURIComponent(key)}` : ""}`} />
   <link rel="apple-touch-icon" href="/remote/apple-touch-icon.png" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-title" content="Selah" />
+  <meta name="apple-mobile-web-app-title" content="EmetPro" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="theme-color" content="#1d3a78" />
 </svelte:head>
 
 <div class="remote">
   <header>
-    <div class="brand"><img src="/favicon.svg" alt="" />Selah</div>
+    <div class="brand"><img src="/favicon.svg" alt="" />EmetPro</div>
     <div class="head-right">
       <span class="conn" class:ok={connection === "open"}>
         <span class="dot" aria-hidden="true"></span>

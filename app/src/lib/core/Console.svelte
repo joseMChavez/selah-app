@@ -399,7 +399,7 @@
 
 <div class="app">
   <header class="topbar">
-    <div class="brand"><img src="/favicon.svg" alt="" />Selah</div>
+    <div class="brand"><img src="/favicon.svg" alt="" />EmetPro</div>
 
     <p class="status" class:on={output.open} role="status">
       <span class="dot" aria-hidden="true"></span>

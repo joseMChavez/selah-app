@@ -113,8 +113,8 @@
   const saveWaitMessage = () =>
     run(async () => {
       setSetting("obsWaitMessage", waitDraft.trim());
-      // Si OBS ya tiene los diseños de Selah, el nuevo texto se ve en la escena «Espera» al momento.
-      if (obs.connected && obs.status?.selahReady) await platform.obsSetup(waitMessage());
+      // Si OBS ya tiene los diseños de EmetPro, el nuevo texto se ve en la escena «Espera» al momento.
+      if (obs.connected && obs.status?.emetproReady) await platform.obsSetup(waitMessage());
     }, "stream");
 
   onMount(() => {

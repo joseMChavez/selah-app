@@ -143,7 +143,7 @@ mod tests {
     fn parses_sample_bibles() {
         let dir = BibleDirs {
             builtin: Some(Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/bibles")),
-            user: std::env::temp_dir().join("selah-test-sin-biblias"),
+            user: std::env::temp_dir().join("emetpro-test-sin-biblias"),
         };
         let mut library = Library::default();
         let start = std::time::Instant::now();

@@ -1,4 +1,4 @@
-// La pizarra vista desde las ventanas de Selah (consola y salida): una copia que sigue al backend.
+// La pizarra vista desde las ventanas de EmetPro (consola y salida): una copia que sigue al backend.
 // Los puntos no pasan por $state (serían miles de proxies): la pizarra es un objeto normal y `version` avisa
 // de cada cambio a quien dibuja.
 import { platform } from "$lib/platform";

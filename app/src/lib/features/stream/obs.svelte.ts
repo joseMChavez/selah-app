@@ -8,9 +8,9 @@ const POLL_MS = 1000;
 const LAUNCH_WAIT_MS = 25_000;
 
 export const SCENES = {
-  camera: "Selah · Cámara",
-  cameraText: "Selah · Cámara + texto",
-  wait: "Selah · Espera",
+  camera: "EmetPro · Cámara",
+  cameraText: "EmetPro · Cámara + texto",
+  wait: "EmetPro · Espera",
 } as const;
 
 export const obs = $state({
@@ -56,7 +56,7 @@ export function waitMessage(): string {
   return settings.obsWaitMessage.trim() || t("stream.waitMessage");
 }
 
-/** Al abrir Selah: si OBS ya está abierto y preparado, se conecta sin pedir nada (se puede desactivar en Ajustes). */
+/** Al abrir EmetPro: si OBS ya está abierto y preparado, se conecta sin pedir nada (se puede desactivar en Ajustes). */
 export async function init() {
   const found = await detect().catch((e) => {
     platform.logError(`OBS: no se pudo detectar: ${JSON.stringify(e)}`).catch(() => {});

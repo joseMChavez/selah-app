@@ -1,4 +1,4 @@
-// Importar y exportar letras: el formato propio de Selah (.selah) y las listas de Holyrics (.hpls).
+// Importar y exportar letras: el formato propio de EmetPro (.emetpro; también lee los .selah de antes) y las listas de Holyrics (.hpls).
 // Plugin interno «transfer»: la interfaz llama a sus comandos como `plugin:transfer|<comando>` (platform/tauri.ts).
 //
 // Sirve de ejemplo de funcionalidad autónoma (docs/ARQUITECTURA.md): todo lo suyo está en esta carpeta y en
@@ -15,7 +15,7 @@ use tauri::plugin::{Builder, TauriPlugin};
 use tauri::{Manager, Wry};
 
 use self::domain::Incoming;
-use self::formats::selah::Background;
+use self::formats::emetpro::Background;
 
 pub const NAME: &str = "transfer";
 

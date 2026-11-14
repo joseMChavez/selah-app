@@ -1,4 +1,4 @@
-// Ajustes de Selah, guardados en la base de datos local (SQLite) del backend.
+// Ajustes de EmetPro, guardados en la base de datos local (SQLite) del backend.
 // Cada ajuste tiene un valor inicial: restablecer es borrar la clave de la base.
 // Las dos ventanas comparten los ajustes: el backend avisa de cada cambio a ambas.
 import type { Locale } from "$lib/i18n/index.svelte";
@@ -34,9 +34,9 @@ const SCHEMA = {
   obsWaitMessage: { initial: "", valid: isString },
   /** Preguntar antes de mostrar algo en la pantalla que ve la congregación. */
   confirmSend: { initial: true, valid: isBoolean },
-  /** Conectar con OBS al abrir Selah si ya está abierto. */
+  /** Conectar con OBS al abrir EmetPro si ya está abierto. */
   obsAutoConnect: { initial: true, valid: isBoolean },
-  /** Servidor del control remoto encendido; se vuelve a encender al abrir Selah. */
+  /** Servidor del control remoto encendido; se vuelve a encender al abrir EmetPro. */
   remoteEnabled: { initial: false, valid: isBoolean },
 };
 
