@@ -1,4 +1,4 @@
-// Formato propio de Selah para letras (.selah). Un solo archivo binario, no un zip:
+// Formato propio de EmetPro para letras (.emetpro). Un solo archivo binario, no un zip:
 //
 //   «SELAHLTR»            8 bytes
 //   versión               u16 little-endian (1)
@@ -8,11 +8,17 @@
 //
 // El manifiesto se puede leer con cualquier editor saltando los primeros 14 bytes. Cada fondo lleva su tamaño
 // y su SHA-256: si no coinciden, el archivo se rechaza.
+//
+// Antes de llamarse EmetPro la app se llamaba Selah y estos archivos eran .selah. El contenido no cambió:
+// la cabecera y el `format` siguen siendo los de entonces, así que un .selah se importa igual, y Selah 0.8 lee un
+// .emetpro si se le cambia la extensión. No se cambian: son parte del formato, no el nombre de la app.
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::features::transfer::domain::Incoming;
 
+/// Extensión de los archivos que se exportan; la importación también acepta `.selah`.
+pub const EXTENSION: &str = "emetpro";
 const MAGIC: &[u8; 8] = b"SELAHLTR";
 const VERSION: u16 = 1;
 const FORMAT: &str = "selah-songs";
@@ -26,7 +32,7 @@ pub struct Manifest {
     pub version: u16,
     /// Segundos desde 1970.
     pub exported_at: i64,
-    /// «Selah 0.4.0»: quién escribió el archivo.
+    /// «EmetPro 0.9.0» (o «Selah 0.8.2» en archivos anteriores): quién escribió el archivo.
     pub app: String,
     pub songs: Vec<SongEntry>,
     /// Ids de `songs`, en el orden de la lista del culto.
@@ -67,7 +73,7 @@ pub struct Background {
     pub bytes: Vec<u8>,
 }
 
-/// Lo que trae un .selah.
+/// Lo que trae un .emetpro (o un .selah).
 #[derive(Debug)]
 pub struct Package {
     pub songs: Vec<Incoming>,
@@ -76,7 +82,7 @@ pub struct Package {
     pub backgrounds: Vec<Background>,
 }
 
-pub fn is_selah(bytes: &[u8]) -> bool {
+pub fn is_package(bytes: &[u8]) -> bool {
     bytes.starts_with(MAGIC)
 }
 
@@ -100,12 +106,12 @@ pub fn write(mut manifest: Manifest, backgrounds: &[Background]) -> Result<Vec<u
 }
 
 pub fn read(bytes: &[u8]) -> Result<Package, String> {
-    if !is_selah(bytes) || bytes.len() < 14 {
-        return Err("no es un archivo de letras de Selah".into());
+    if !is_package(bytes) || bytes.len() < 14 {
+        return Err("no es un archivo de letras de EmetPro".into());
     }
     let version = u16::from_le_bytes([bytes[8], bytes[9]]);
     if version > VERSION {
-        return Err(format!("lo escribió una versión más nueva de Selah (formato {version}); actualiza Selah"));
+        return Err(format!("lo escribió una versión más nueva de EmetPro (formato {version}); actualiza EmetPro"));
     }
     let len = u32::from_le_bytes([bytes[10], bytes[11], bytes[12], bytes[13]]) as usize;
     if len > MAX_MANIFEST || 14 + len > bytes.len() {
@@ -182,7 +188,7 @@ mod tests {
     fn ida_y_vuelta() {
         let image = Background { name: "fondo.jpg".into(), bytes: vec![1, 2, 3, 4] };
         let bytes = write(manifest(), &[image]).unwrap();
-        assert!(is_selah(&bytes));
+        assert!(is_package(&bytes));
         let package = read(&bytes).unwrap();
         assert_eq!(package.songs.len(), 2);
         assert_eq!(package.songs[0].slides, ["Uno", "Dos"]);

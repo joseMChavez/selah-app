@@ -9,7 +9,7 @@ export { parseList, type ParsedLine } from "./references";
 
 export type ScriptureItem = Extract<PlanItem, { kind: "scripture" }>;
 
-/** La versión con la que se mostrará: la fija del elemento (si sigue en Selah) o la elegida en la consola. */
+/** La versión con la que se mostrará: la fija del elemento (si sigue en EmetPro) o la elegida en la consola. */
 export function bibleFor(item: ScriptureItem): BibleInfo | null {
   return (item.bible && bibles.all.find((b) => b.id === item.bible)) || currentBibles().bible;
 }

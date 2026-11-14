@@ -1,9 +1,9 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Selah",
-  "mainBinaryName": "selah",
-  "version": "0.8.2",
-  "identifier": "org.selah.app",
+  "productName": "EmetPro",
+  "mainBinaryName": "emetpro",
+  "version": "0.9.0",
+  "identifier": "org.emetpro.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -14,7 +14,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Selah — Consola",
+        "title": "EmetPro",
         "width": 1100,
         "height": 760,
         "minWidth": 800,
@@ -44,8 +44,8 @@
     },
     "category": "Utility",
     "publisher": "joseMChavez",
-    "shortDescription": "Proyección y transmisión para iglesias",
-    "longDescription": "Selah proyecta Biblia, textos e imágenes en la pantalla del templo y controla la transmisión en vivo con OBS.",
+    "shortDescription": "Projection and live streaming for churches",
+    "longDescription": "EmetPro projects Bible passages, lyrics, text, images, videos and presentations on the church screen, can be driven from a phone, and controls the live stream through OBS.",
     "license": "GPL-3.0-only",
     "linux": {
       "deb": {

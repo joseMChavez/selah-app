@@ -59,7 +59,7 @@ mod tests {
     use std::path::PathBuf;
 
     fn temp_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("selah-store-{name}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("emetpro-store-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         dir
     }

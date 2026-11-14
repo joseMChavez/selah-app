@@ -21,6 +21,10 @@ pub async fn obs_launch() -> Result<(), CommandError> {
 #[tauri::command]
 pub async fn obs_connect(state: State<'_, ObsState>) -> Result<(), CommandError> {
     let client = client::connect().await?;
+    // Antes de que la interfaz pregunte por las escenas: si eran las de Selah, ya tienen el nombre nuevo.
+    if let Err(e) = client::rename_legacy(&client).await {
+        eprintln!("[obs] no se pudieron renombrar las escenas de Selah: {e}");
+    }
     *state.0.lock().await = Some(client);
     Ok(())
 }

@@ -1,4 +1,4 @@
-// Tipos de archivo que Selah sabe mostrar.
+// Tipos de archivo que EmetPro sabe mostrar.
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};

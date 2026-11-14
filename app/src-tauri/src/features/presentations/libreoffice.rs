@@ -1,6 +1,6 @@
 // Copia privada de LibreOffice para convertir presentaciones cuando el equipo no tiene con qué (o falla).
 // Con permiso del usuario se descarga de The Document Foundation, se comprueba su SHA-256 y se guarda en la
-// carpeta de datos de Selah, sin instalarla en el sistema: AppImage extraído en Linux, MSI extraído sin
+// carpeta de datos de EmetPro, sin instalarla en el sistema: AppImage extraído en Linux, MSI extraído sin
 // administrador en Windows y LibreOffice.app copiada del .dmg en macOS. La versión es fija (probada);
 // las sumas son las que publica download.documentfoundation.org (y la del AppImage, calculada al fijarla).
 use std::io::Write;
@@ -169,7 +169,7 @@ pub async fn install(data: &Path, mut progress: impl FnMut(Progress) + Send) -> 
 
 async fn fetch(url: &str, file: &Path, package: &Package, progress: &mut impl FnMut(Progress)) -> Result<(), InstallError> {
     let client = reqwest::Client::builder()
-        .user_agent(concat!("Selah/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("EmetPro/", env!("CARGO_PKG_VERSION")))
         .connect_timeout(Duration::from_secs(30))
         .build()
         .map_err(failed)?;
@@ -333,7 +333,7 @@ mod tests {
     use super::*;
 
     fn temp(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("selah-lo-{name}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("emetpro-lo-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir

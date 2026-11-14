@@ -12,7 +12,7 @@ use crate::core::error::{internal, CommandError};
 pub struct OfficeStatus {
     /// LibreOffice instalado en el sistema.
     system: bool,
-    /// La copia privada de Selah está lista.
+    /// La copia privada de EmetPro está lista.
     private_copy: bool,
     /// Hay copia privada para este sistema.
     downloadable: bool,

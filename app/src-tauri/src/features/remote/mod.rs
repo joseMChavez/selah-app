@@ -73,7 +73,7 @@ pub struct RemoteState {
 /// Cuántos mensajes de la pizarra puede ir atrasado un teléfono antes de mandarle la pizarra entera.
 const BOARD_BACKLOG: usize = 512;
 
-/// La pizarra y su reparto: a los teléfonos por `tx` (el WebSocket de cada uno) y a las ventanas de Selah
+/// La pizarra y su reparto: a los teléfonos por `tx` (el WebSocket de cada uno) y a las ventanas de EmetPro
 /// (consola y salida) por el evento REMOTE_BOARD_EVENT. Los mensajes son los mismos para todos.
 pub struct BoardHub {
     board: Mutex<Board>,
@@ -148,7 +148,7 @@ fn load_key(app: &AppHandle) -> String {
     }
 }
 
-/// Clave nueva, guardada. Si no se puede guardar, vale hasta cerrar Selah.
+/// Clave nueva, guardada. Si no se puede guardar, vale hasta cerrar EmetPro.
 fn save_key(app: &AppHandle) -> String {
     let key = new_key();
     if let Some(file) = key_file(app) {

@@ -131,12 +131,12 @@ export interface ObsDetection {
 export interface ObsStatus {
   obsVersion: string;
   programScene: string | null;
-  /** Todas las escenas de OBS, en el orden de su ventana: las del usuario y las de Selah. */
+  /** Todas las escenas de OBS, en el orden de su ventana: las del usuario y las de EmetPro. */
   scenes: string[];
-  /** Fuentes de texto de OBS que Selah puede rellenar. */
+  /** Fuentes de texto de OBS que EmetPro puede rellenar. */
   textSources: string[];
-  /** Las escenas de Selah existen en OBS. */
-  selahReady: boolean;
+  /** Las escenas de EmetPro existen en OBS. */
+  emetproReady: boolean;
   hasCamera: boolean;
   streaming: {
     active: boolean;
@@ -199,7 +199,7 @@ export type CommandError =
   | { code: "remoteFailed"; reason: string }
   | { code: "internal"; message: string };
 
-/** LibreOffice para las presentaciones: el del sistema o la copia privada que Selah puede descargar. */
+/** LibreOffice para las presentaciones: el del sistema o la copia privada que EmetPro puede descargar. */
 export interface OfficeStatus {
   system: boolean;
   privateCopy: boolean;
@@ -229,7 +229,7 @@ export type ImportInvalidReason = "noTitle" | "noLyrics" | "repeated";
 
 export interface ImportPreview {
   file: string;
-  format: "selah" | "holyrics";
+  format: "emetpro" | "holyrics";
   fresh: ImportSong[];
   /** Ya están con la misma letra: no se tocan. */
   identical: number;
@@ -394,12 +394,12 @@ export interface Platform {
   onRemoteBoard(handler: (message: BoardMessage) => void): Promise<() => void>;
 
   // Importar y exportar letras (features/transfer)
-  /** Elige un .selah o .hpls y devuelve la vista previa; null si se cancela. No guarda nada. */
+  /** Elige un .emetpro, .selah o .hpls y devuelve la vista previa; null si se cancela. No guarda nada. */
   transferImportPick(title: string, filterName: string): Promise<ImportPreview | null>;
   /** Guarda lo de la última vista previa. Con planName, la lista del archivo se guarda además como un plan. */
   transferImportApply(onConflict: OnConflict, planName: string | null, importedSuffix: string): Promise<ImportResult>;
   transferImportCancel(): Promise<void>;
-  /** Guarda la biblioteca (o solo las letras de un plan) en un .selah; null si se cancela. */
+  /** Guarda la biblioteca (o solo las letras de un plan) en un .emetpro; null si se cancela. */
   transferExport(title: string, filterName: string, fileName: string, planId: string | null): Promise<{ path: string; songs: number } | null>;
 
   // Transmisión con OBS
@@ -410,7 +410,7 @@ export interface Platform {
   obsConnect(): Promise<void>;
   obsDisconnect(): Promise<void>;
   obsStatus(): Promise<ObsStatus>;
-  /** Crea o completa las escenas de Selah en OBS. */
+  /** Crea o completa las escenas de EmetPro en OBS. */
   obsSetup(waitText: string): Promise<void>;
   obsSetScene(scene: string): Promise<void>;
   /** Escribe el texto en esa fuente de OBS y la hace visible en la emisión. */

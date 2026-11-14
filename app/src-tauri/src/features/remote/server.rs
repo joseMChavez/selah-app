@@ -1,6 +1,6 @@
 // El servidor del control remoto: sirve la página del teléfono, una API mínima y un WebSocket.
 //
-//   GET /remote?key=…    la página (la misma interfaz de Selah, ruta /remote)
+//   GET /remote?key=…    la página (la misma interfaz de EmetPro, ruta /remote)
 //   GET /_app/…          sus archivos
 //   GET /api/chapter     versículos de un capítulo, para elegir en el teléfono
 //   GET /api/thumb       miniatura de una página del PDF en pantalla (thumbs.rs)
@@ -256,6 +256,6 @@ async fn asset(State(shared): State<Shared>, uri: Uri) -> Response {
             ([(header::CONTENT_TYPE, asset.mime_type), (header::CACHE_CONTROL, cache.to_string())], asset.bytes).into_response()
         }
         // En `tauri dev` la interfaz no va dentro del ejecutable: hay que probar con un build.
-        None => (StatusCode::SERVICE_UNAVAILABLE, "Selah: esta compilacion no incluye la interfaz (tauri dev). Usa un build.").into_response(),
+        None => (StatusCode::SERVICE_UNAVAILABLE, "EmetPro: esta compilacion no incluye la interfaz (tauri dev). Usa un build.").into_response(),
     }
 }

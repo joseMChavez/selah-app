@@ -169,7 +169,7 @@
     if (!plan) return;
     copying = true;
     try {
-      // Se guardan copias en la carpeta de Selah: el plan sigue sirviendo aunque se mueva o borre el original.
+      // Se guardan copias en la carpeta de EmetPro: el plan sigue sirviendo aunque se mueva o borre el original.
       const picked: MediaFile[] = await platform.planPickMedia(t("dialog.title"), t("dialog.filter"));
       // El plan pudo cambiar mientras el diálogo estaba abierto: se añade al que está abierto ahora.
       const target = openPlan.plan;

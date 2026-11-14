@@ -69,7 +69,7 @@ mod tests {
     use std::path::PathBuf;
 
     fn temp_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("selah-store-{name}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("emetpro-store-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         dir
     }
@@ -112,7 +112,7 @@ mod tests {
         let dir = temp_dir("lista-a-plan");
         std::fs::create_dir_all(&dir).unwrap();
         {
-            let conn = Connection::open(dir.join("selah.db")).unwrap();
+            let conn = Connection::open(dir.join(crate::core::db::FILE)).unwrap();
             conn.execute_batch(
                 "CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
                  CREATE TABLE songs (id TEXT PRIMARY KEY, title TEXT NOT NULL, singer TEXT NOT NULL DEFAULT '',

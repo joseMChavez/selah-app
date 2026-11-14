@@ -1,6 +1,6 @@
 // Presentaciones (PowerPoint, Impress, Keynote) → PDF; luego se muestran como cualquier PDF.
 // Un webview no sabe dibujar un PPTX, así que se convierte con lo que haya en el equipo, en este orden:
-// LibreOffice (el del sistema o la copia privada de Selah, libreoffice.rs), que es el que mejor funciona;
+// LibreOffice (el del sistema o la copia privada de EmetPro, libreoffice.rs), que es el que mejor funciona;
 // luego PowerPoint (COM) en Windows, y Keynote y PowerPoint en macOS. Si uno falla se prueba el siguiente. La conversión se guarda en caché y se rehace si el archivo cambia.
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -292,7 +292,7 @@ mod tests {
 
     #[test]
     fn url_de_perfil() {
-        assert_eq!(file_url(Path::new("/home/ana/.cache/selah/perfil")), "file:///home/ana/.cache/selah/perfil");
+        assert_eq!(file_url(Path::new("/home/ana/.cache/emetpro/perfil")), "file:///home/ana/.cache/emetpro/perfil");
         assert_eq!(file_url(Path::new("/home/ana maría/x")), "file:///home/ana%20mar%C3%ADa/x");
         assert_eq!(file_url(Path::new(r"C:\Users\Ana Pérez\x")), "file:///C:/Users/Ana%20P%C3%A9rez/x");
     }
@@ -336,7 +336,7 @@ mod tests {
     #[test]
     #[ignore]
     fn convierte_un_pptx() {
-        let dir = std::env::temp_dir().join(format!("selah-office-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("emetpro-office-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let page = |n: &str| format!(

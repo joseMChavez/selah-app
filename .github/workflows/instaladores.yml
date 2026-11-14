@@ -1,4 +1,4 @@
-# Instaladores de Selah para Linux, Windows y macOS.
+# Instaladores de EmetPro para Linux, Windows y macOS.
 # - Al subir una etiqueta vX.Y.Z: compila los tres sistemas y deja un borrador en Releases.
 # - A mano (Actions → Instaladores → Run workflow): compila y deja los archivos como artefactos.
 # Las Biblias XML no están en git, así que estos instaladores salen sin Biblias (ver D-013).
@@ -84,10 +84,11 @@ jobs:
           args: ${{ matrix.args }}
           # Sin etiqueta (ejecución a mano) solo compila; con etiqueta sube al borrador de la versión.
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
-          releaseName: Selah ${{ github.ref_name }}
+          releaseName: EmetPro ${{ github.ref_name }}
           releaseBody: |
-            Versión de prueba (MVP). Instaladores sin firmar: Windows y macOS mostrarán un aviso al abrirlos.
-            Las Biblias no vienen incluidas; se importan desde Selah (formato XML de Beblia).
+            Pre-release. The installers are not signed, so Windows and macOS will show a warning the first time you open them.
+            Bibles are not included: import them from EmetPro (Beblia XML format).
+            EmetPro was called Selah up to 0.8.2. Install this version and open it once: it copies your Selah data (Bibles, lyrics, plans, media, settings). Then you can uninstall Selah.
           releaseDraft: true
           prerelease: true
 
@@ -95,7 +96,7 @@ jobs:
         if: github.ref_type != 'tag'
         uses: actions/upload-artifact@v7
         with:
-          name: selah-${{ matrix.name }}
+          name: emetpro-${{ matrix.name }}
           path: |
             app/src-tauri/target/release/bundle/
             app/src-tauri/target/universal-apple-darwin/release/bundle/

@@ -1,4 +1,4 @@
-// Transmisión con OBS: detectar, configurar su WebSocket, escenas de Selah, texto y emisión.
+// Transmisión con OBS: detectar, configurar su WebSocket, escenas de EmetPro, texto y emisión.
 // Plugin interno «obs»: la interfaz llama a sus comandos como `plugin:obs|<comando>` (platform/tauri.ts).
 pub mod client;
 mod commands;

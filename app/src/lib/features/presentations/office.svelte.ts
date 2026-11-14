@@ -1,5 +1,5 @@
 // LibreOffice para las presentaciones, compartido por Medios y Ajustes. Si el equipo no tiene con qué
-// convertir (o falla), Selah ofrece descargar su propia copia; solo se descarga cuando el usuario lo pide.
+// convertir (o falla), EmetPro ofrece descargar su propia copia; solo se descarga cuando el usuario lo pide.
 import { toMessage, type Message } from "$lib/core/messages";
 import { platform, type OfficeProgress, type OfficeStatus } from "$lib/platform";
 

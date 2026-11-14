@@ -1,6 +1,6 @@
 // Transmisión con OBS por obs-websocket 5 (D-008).
-// Selah prepara OBS (activa el WebSocket con permiso del usuario y con OBS cerrado), lo abre y se conecta.
-// Crea sus propias escenas «Selah · …» y solo toca esas: el resto de la configuración de OBS queda igual.
+// EmetPro prepara OBS (activa el WebSocket con permiso del usuario y con OBS cerrado), lo abre y se conecta.
+// Crea sus propias escenas «EmetPro · …» y solo toca esas: el resto de la configuración de OBS queda igual.
 use std::path::PathBuf;
 use std::process::Command;
 use std::time::Duration;
@@ -15,17 +15,22 @@ use obws::requests::sources::{SourceId, TakeScreenshot};
 use serde::Serialize;
 use serde_json::{Value, json};
 
-pub const SCENE_CAMERA: &str = "Selah · Cámara";
-pub const SCENE_CAMERA_TEXT: &str = "Selah · Cámara + texto";
-pub const SCENE_WAIT: &str = "Selah · Espera";
-const SELAH_SCENES: [&str; 3] = [SCENE_CAMERA, SCENE_CAMERA_TEXT, SCENE_WAIT];
+pub const SCENE_CAMERA: &str = "EmetPro · Cámara";
+pub const SCENE_CAMERA_TEXT: &str = "EmetPro · Cámara + texto";
+pub const SCENE_WAIT: &str = "EmetPro · Espera";
+const SCENES: [&str; 3] = [SCENE_CAMERA, SCENE_CAMERA_TEXT, SCENE_WAIT];
 
-const INPUT_CAMERA: &str = "Selah · Cámara (dispositivo)";
-const INPUT_BAND: &str = "Selah · Banda";
-const INPUT_TEXT: &str = "Selah · Texto";
-const INPUT_CREDIT: &str = "Selah · Créditos";
-const INPUT_WAIT_BG: &str = "Selah · Fondo de espera";
-const INPUT_WAIT_TEXT: &str = "Selah · Texto de espera";
+const INPUT_CAMERA: &str = "EmetPro · Cámara (dispositivo)";
+const INPUT_BAND: &str = "EmetPro · Banda";
+const INPUT_TEXT: &str = "EmetPro · Texto";
+const INPUT_CREDIT: &str = "EmetPro · Créditos";
+const INPUT_WAIT_BG: &str = "EmetPro · Fondo de espera";
+const INPUT_WAIT_TEXT: &str = "EmetPro · Texto de espera";
+const INPUTS: [&str; 6] = [INPUT_CAMERA, INPUT_BAND, INPUT_TEXT, INPUT_CREDIT, INPUT_WAIT_BG, INPUT_WAIT_TEXT];
+
+/// Prefijo de las escenas y fuentes que creaba la app cuando se llamaba Selah (hasta la 0.8).
+const LEGACY_PREFIX: &str = "Selah · ";
+const PREFIX: &str = "EmetPro · ";
 
 const DEFAULT_PORT: u16 = 4455;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
@@ -35,7 +40,7 @@ pub enum ObsError {
     NotInstalled,
     /// OBS está abierto: si se cambia su configuración ahora, OBS la sobrescribe al cerrar.
     Running,
-    /// OBS está abierto en modo seguro: no carga el WebSocket, así que Selah no puede conectarse.
+    /// OBS está abierto en modo seguro: no carga el WebSocket, así que EmetPro no puede conectarse.
     SafeMode,
     Failed(String),
 }
@@ -81,12 +86,12 @@ pub struct Destination {
 pub struct Status {
     pub obs_version: String,
     pub program_scene: Option<String>,
-    /// Todas las escenas de OBS, en el orden en que OBS las muestra (las del usuario y las de Selah).
+    /// Todas las escenas de OBS, en el orden en que OBS las muestra (las del usuario y las de EmetPro).
     pub scenes: Vec<String>,
-    /// Fuentes de texto de OBS que Selah puede rellenar.
+    /// Fuentes de texto de OBS que EmetPro puede rellenar.
     pub text_sources: Vec<String>,
-    /// Las tres escenas de Selah existen en OBS.
-    pub selah_ready: bool,
+    /// Las tres escenas de EmetPro existen en OBS.
+    pub emetpro_ready: bool,
     pub has_camera: bool,
     pub streaming: StreamInfo,
     pub destination: Option<Destination>,
@@ -187,7 +192,7 @@ pub fn detect() -> Detection {
 /// Si OBS no se cerró bien (se colgó, se apagó el equipo…), al abrirlo otra vez pregunta si arrancar en modo
 /// seguro; en ese modo no carga el WebSocket. OBS 32 pregunta aunque reciba --disable-shutdown-check.
 /// Lo detecta por los archivos que deja en `.sentinel/` mientras está abierto: con OBS cerrado, los que queden
-/// son de una sesión que terminó mal. Se borran justo antes de que Selah lo abra, para que arranque normal.
+/// son de una sesión que terminó mal. Se borran justo antes de que EmetPro lo abra, para que arranque normal.
 fn clear_unclean_shutdown() {
     for dir in config_dirs() {
         let Ok(entries) = std::fs::read_dir(dir.join(".sentinel")) else { continue };
@@ -281,6 +286,31 @@ pub async fn connect() -> Result<Client, ObsError> {
     }
 }
 
+/// Las escenas y fuentes «Selah · …» de antes del cambio de nombre pasan a llamarse «EmetPro · …». Se renombran
+/// en vez de crear otras: así conservan lo que el usuario les haya ajustado en OBS (cámara, posiciones, filtros).
+/// Si ya existe la de nombre nuevo, la vieja se deja como está. Se repite en cada conexión sin efecto.
+pub async fn rename_legacy(client: &Client) -> obws::error::Result<()> {
+    let scenes: Vec<String> = client.scenes().list().await?.scenes.into_iter().map(|s| s.id.name).collect();
+    for new in SCENES {
+        let old = legacy_name(new);
+        if scenes.contains(&old) && !scenes.iter().any(|s| s == new) {
+            client.scenes().set_name(old.as_str().into(), new).await?;
+        }
+    }
+    let inputs: Vec<String> = client.inputs().list(None).await?.into_iter().map(|i| i.id.name).collect();
+    for new in INPUTS {
+        let old = legacy_name(new);
+        if inputs.contains(&old) && !inputs.iter().any(|i| i == new) {
+            client.inputs().set_name(InputId::Name(&old), new).await?;
+        }
+    }
+    Ok(())
+}
+
+fn legacy_name(name: &str) -> String {
+    name.replacen(PREFIX, LEGACY_PREFIX, 1)
+}
+
 pub async fn status(client: &Client) -> obws::error::Result<Status> {
     let version = client.general().version().await?;
     let mut scenes = client.scenes().list().await?.scenes;
@@ -303,7 +333,7 @@ pub async fn status(client: &Client) -> obws::error::Result<Status> {
     Ok(Status {
         obs_version: version.obs_studio_version.to_string(),
         program_scene: program,
-        selah_ready: SELAH_SCENES.iter().all(|s| names.iter().any(|n| n == s)),
+        emetpro_ready: SCENES.iter().all(|s| names.iter().any(|n| n == s)),
         scenes: names,
         text_sources,
         has_camera: inputs.iter().any(|i| i.id.name == INPUT_CAMERA),
@@ -386,7 +416,7 @@ async fn place(client: &Client, scene: &str, item_id: i64, x: f32, y: f32, bound
     client.scene_items().set_transform(SetTransform { scene: scene.into(), item_id, transform }).await
 }
 
-/// Crea o completa las escenas de Selah. Se puede repetir sin duplicar nada.
+/// Crea o completa las escenas de EmetPro. Se puede repetir sin duplicar nada.
 pub async fn setup(client: &Client, wait_text: &str) -> obws::error::Result<()> {
     let video = client.config().video_settings().await?;
     let (w, h) = (video.base_width as f32, video.base_height as f32);
@@ -397,7 +427,7 @@ pub async fn setup(client: &Client, wait_text: &str) -> obws::error::Result<()> 
     let color_kind = pick_kind(&kinds, &["color_source_v3", "color_source_v2", "color_source"]).unwrap_or_else(|| "color_source_v3".into());
 
     let scenes: Vec<String> = client.scenes().list().await?.scenes.into_iter().map(|s| s.id.name).collect();
-    for scene in SELAH_SCENES {
+    for scene in SCENES {
         if !scenes.iter().any(|s| s == scene) {
             client.scenes().create(scene).await?;
         }
@@ -465,8 +495,8 @@ async fn set_item_visible(client: &Client, scene: &str, item_id: i64, enabled: b
     client.scene_items().set_enabled(SetEnabled { scene: scene.into(), item_id, enabled }).await
 }
 
-/// Escribe el texto en la fuente elegida (de Selah o del usuario) y la hace visible en la emisión.
-/// Los créditos van en su propia fuente con el diseño de Selah; con fuentes del usuario, en la última línea.
+/// Escribe el texto en la fuente elegida (de EmetPro o del usuario) y la hace visible en la emisión.
+/// Los créditos van en su propia fuente con el diseño de EmetPro; con fuentes del usuario, en la última línea.
 pub async fn show_text(client: &Client, source: &str, text: &str, credit: &str) -> obws::error::Result<TextShown> {
     if source == INPUT_TEXT {
         set_input_text(client, INPUT_TEXT, text).await?;
@@ -493,7 +523,7 @@ pub async fn show_text(client: &Client, source: &str, text: &str, credit: &str) 
     Ok(TextShown::NotInScene)
 }
 
-/// Oculta la fuente de texto en la escena al aire. Con el diseño de Selah se vuelve a «Cámara»,
+/// Oculta la fuente de texto en la escena al aire. Con el diseño de EmetPro se vuelve a «Cámara»,
 /// para no dejar la banda vacía.
 pub async fn hide_text(client: &Client, source: &str) -> obws::error::Result<()> {
     let program = client.scenes().current_program_scene().await?.id.name;

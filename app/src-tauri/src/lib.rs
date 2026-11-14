@@ -12,6 +12,8 @@ use crate::core::events::MAIN_LABEL;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Primero: copia los datos de Selah (el nombre anterior) antes de que nadie lea la carpeta nueva.
+        .plugin(core::legacy::plugin())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(features::output::plugin())

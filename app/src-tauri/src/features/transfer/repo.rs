@@ -31,7 +31,7 @@ mod tests {
 
     #[test]
     fn importa_las_letras_y_su_plan_juntos() {
-        let dir = std::env::temp_dir().join(format!("selah-transfer-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("emetpro-transfer-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let mut store = Store::open(&dir);
         store.save_song(&song("a")).unwrap();

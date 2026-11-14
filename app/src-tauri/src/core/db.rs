@@ -8,7 +8,7 @@ use rusqlite::Connection;
 
 use crate::core::error::CommandError;
 
-const FILE: &str = "selah.db";
+pub const FILE: &str = "emetpro.db";
 
 /// Cada entrada lleva la base de una versión a la siguiente; PRAGMA user_version guarda cuántas se aplicaron.
 /// Nunca se edita una entrada publicada: los cambios van en una entrada nueva.
@@ -117,7 +117,7 @@ impl Store {
 fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     conn.pragma_update(None, "foreign_keys", true)?;
     let applied: i64 = conn.query_row("PRAGMA user_version", [], |row| row.get(0))?;
-    // Una base de una versión más nueva de Selah se usa tal cual: no se toca su esquema.
+    // Una base de una versión más nueva de EmetPro se usa tal cual: no se toca su esquema.
     for (i, sql) in MIGRATIONS.iter().enumerate().skip(applied.max(0) as usize) {
         conn.execute_batch(&format!("BEGIN; {sql} PRAGMA user_version = {}; COMMIT;", i + 1))?;
     }
@@ -145,7 +145,7 @@ mod tests {
     use serde_json::Value;
 
     fn temp_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("selah-store-{name}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("emetpro-store-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         dir
     }

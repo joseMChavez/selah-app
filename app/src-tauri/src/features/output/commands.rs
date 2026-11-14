@@ -46,7 +46,7 @@ pub async fn open_output(
     let window = match app.get_webview_window(OUTPUT_LABEL) {
         Some(window) => window,
         None => WebviewWindowBuilder::new(&app, OUTPUT_LABEL, WebviewUrl::App("output".into()))
-            .title("Selah — Salida")
+            .title("EmetPro — Salida")
             .decorations(false)
             .visible(false)
             .build()

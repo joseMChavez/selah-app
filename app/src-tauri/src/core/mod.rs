@@ -3,5 +3,6 @@ pub mod assets;
 pub mod db;
 pub mod error;
 pub mod events;
+pub mod legacy;
 pub mod log;
 pub mod picker;

@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Importar letras (de un .selah o de una lista de Holyrics) y exportar la biblioteca a un .selah.
+  // Importar letras (de un .emetpro o .selah, o de una lista de Holyrics) y exportar la biblioteca a un .emetpro.
   // Primero se ve qué va a entrar y se elige qué hacer con las repetidas; nada se guarda hasta confirmar.
   import type { PanelProps } from "$lib/core/panels";
   import { toMessage } from "$lib/core/messages";
@@ -84,7 +84,7 @@
     exported = null;
     const date = new Date().toISOString().slice(0, 10);
     const plan = plans.all.find((p) => p.id === planId);
-    const name = plan ? `${plan.name} ${plan.date ?? date}.selah` : `${t("transfer.fileLibrary")} ${date}.selah`;
+    const name = plan ? `${plan.name} ${plan.date ?? date}.emetpro` : `${t("transfer.fileLibrary")} ${date}.emetpro`;
     try {
       busy = true;
       exported = await platform.transferExport(t("transfer.exportTitle"), t("transfer.exportFilter"), name, planId);
@@ -112,7 +112,7 @@
       <div class="preview" aria-live="polite">
         <p class="file">
           <strong>{preview.file}</strong>
-          <span class="muted small">{t(preview.format === "holyrics" ? "transfer.formatHolyrics" : "transfer.formatSelah")}</span>
+          <span class="muted small">{t(preview.format === "holyrics" ? "transfer.formatHolyrics" : "transfer.formatEmetpro")}</span>
         </p>
 
         {#if preview.fresh.length > 0}
