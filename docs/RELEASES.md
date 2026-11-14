@@ -1,6 +1,6 @@
 # Releasing a version
 
-The installers are built on GitHub Actions (`.github/workflows/instaladores.yml`) and published on [Releases](https://github.com/joseMChavez/selah-app/releases). See D-013 in [DECISIONS.md](DECISIONS.md).
+The installers are built on GitHub Actions (`.github/workflows/instaladores.yml`) and published on [Releases](https://github.com/joseMChavez/emetpro/releases). See D-013 in [DECISIONS.md](DECISIONS.md).
 
 | System | Files |
 |---|---|

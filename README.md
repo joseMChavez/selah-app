@@ -30,7 +30,7 @@ EmetPro runs on the computer connected to the church projector or TV. One window
 
 ## Download
 
-Installers for Windows (`.msi`, `.exe`), macOS (universal `.dmg`) and Linux (`.deb`, `.rpm`, `.AppImage`) are on the [Releases](https://github.com/joseMChavez/selah-app/releases) page.
+Installers for Windows (`.msi`, `.exe`), macOS (universal `.dmg`) and Linux (`.deb`, `.rpm`, `.AppImage`) are on the [Releases](https://github.com/joseMChavez/emetpro/releases) page.
 
 The installers are not signed yet, so the system warns the first time you open them:
 - **Windows:** SmartScreen says "Windows protected your PC" → "More info" → "Run anyway".

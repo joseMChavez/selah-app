@@ -145,4 +145,5 @@
 - **Alternativas:** Higaion (difícil de pronunciar), Verbofiel, Facistol, Neguinot; Asaf, Mizmor, Dabar, Davar, Emuná y Fidelis ya estaban en uso.
 - **Quien actualiza no pierde nada:** el identificador nuevo cambia la carpeta de datos. En el primer arranque, `core/legacy.rs` copia de `org.selah.app` la base (con lo pendiente en su WAL), `bibles`, `fondos`, `medios`, `libreoffice` y `remote-key`, y cambia las rutas guardadas que apuntaban a la carpeta vieja. Copia, no mueve: la carpeta de Selah queda de respaldo. La base llega la última, con un rename; si algo falla, se reintenta en el siguiente arranque mientras la base nueva no tenga letras ni planes propios.
 - **Compatibilidad que se mantiene:** los `.selah` se siguen importando; el contenido de los `.emetpro` es el mismo formato (cabecera `SELAHLTR`, `format: "selah-songs"`). En OBS, las escenas y fuentes «Selah · …» se renombran a «EmetPro · …» al conectar, sin duplicarlas. El teléfono lee la clave guardada con el nombre anterior. Las claves `selah.*` de localStorage se quedan: son de una migración más antigua.
-- **Pendiente:** verificar la marca (USPTO, EUIPO, Italia) y decidir si se renombra el repositorio `selah-app`.
+- **Repositorio:** renombrado de `selah-app` a `emetpro` (GitHub redirige los enlaces viejos).
+- **Pendiente:** verificar la marca (USPTO, EUIPO, Italia).
