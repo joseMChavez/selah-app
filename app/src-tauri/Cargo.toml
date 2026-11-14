@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "0.8.1"
+version = "0.8.2"
 description = "Proyección y transmisión para iglesias"
 authors = ["joseMChavez"]
 license = "GPL-3.0-only"
