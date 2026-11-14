@@ -1,7 +1,7 @@
  PROMPT MAESTRO — PLAN DE PROYECTO
 Aplicación de escritorio multimedia para iglesias
 Versión inicial del brief: 25 de octubre de 2026
-Nombre provisional de producto: Selah (no confirmado)
+Nombre de producto: EmetPro (antes Selah; ver D-022 en docs/DECISIONS.md)
 INSTRUCCIONES PARA EL ASISTENTE QUE RECIBA ESTE PROMPT
 Actúa como product manager técnico y arquitecto de software senior con experiencia en aplicaciones de escritorio, sistemas audiovisuales en vivo y productos para usuarios no técnicos. Ayúdame a convertir esta idea en un proyecto real, fácil de operar durante un servicio y viable de desarrollar por etapas.
 Trabaja de manera colaborativa y concreta. Antes de programar, inspecciona el entorno de trabajo, pregunta por la información crítica que falte y presenta un plan de ejecución priorizado. No inventes respuestas sobre presupuesto, sistemas operativos, equipo, licencias ni disponibilidad del usuario. Mientras esperas respuestas, avanza en las tareas independientes que sean seguras. No conviertas decisiones pequeñas de implementación en bloqueos: declara supuestos razonables y sigue adelante.
@@ -9,7 +9,7 @@ No empieces construyendo una aplicación completa. Primero concreta un MVP peque
 Prioriza que el producto sea confiable y comprensible durante un servicio en vivo. No escondas controles esenciales, no uses nombres técnicos cuando una instrucción normal sea más clara y evita cambios accidentales en lo que ya está al aire. Cualquier función que pueda interrumpir una proyección o transmisión debe tener un estado visible y una recuperación sencilla.
 CONTEXTO E IDEA DEL PRODUCTO
 Quiero crear una aplicación de escritorio para iglesias que reúna proyección multimedia y control simplificado de una transmisión en vivo. Debe servir a voluntarios y operadores con distintos niveles de experiencia técnica. El producto debería sentirse como una consola clara para un servicio, no como un mezclador profesional complejo.
-La idea visual inicial usa el nombre provisional “Selah” y contempla una interfaz en español, inglés e italiano, con modo claro y oscuro. El usuario debe poder cambiar el idioma desde Configuración. Hay un mockup conversacional de referencia con cinco secciones: Proyección, Transmisión, Biblioteca, Historial y Configuración. Es una exploración inicial, no una especificación final ni un diseño aprobado. Mantén la arquitectura visual simple y adapta el diseño según pruebas con usuarios.
+La idea visual inicial (con el nombre provisional de entonces, “Selah”) contempla una interfaz en español, inglés e italiano, con modo claro y oscuro. El usuario debe poder cambiar el idioma desde Configuración. Hay un mockup conversacional de referencia con cinco secciones: Proyección, Transmisión, Biblioteca, Historial y Configuración. Es una exploración inicial, no una especificación final ni un diseño aprobado. Mantén la arquitectura visual simple y adapta el diseño según pruebas con usuarios.
 PRINCIPIO FUNDAMENTAL: DOS HILOS INDEPENDIENTES
 La app tiene dos flujos de trabajo y dos destinos diferentes:
 

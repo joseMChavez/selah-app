@@ -33,8 +33,8 @@ $ErrorActionPreference = 'Stop'
 $app = New-Object -ComObject PowerPoint.Application
 try {
   # Open(archivo, solo lectura, sin título, sin ventana)
-  $pres = $app.Presentations.Open($env:SELAH_ORIGEN, -1, 0, 0)
-  try { $pres.SaveAs($env:SELAH_DESTINO, 32) } finally { $pres.Close() }
+  $pres = $app.Presentations.Open($env:EMETPRO_ORIGEN, -1, 0, 0)
+  try { $pres.SaveAs($env:EMETPRO_DESTINO, 32) } finally { $pres.Close() }
 } finally {
   if ($app.Presentations.Count -eq 0) { $app.Quit() }
   [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($app)
@@ -239,8 +239,8 @@ fn command_for(converter: &Converter, source: &Path, pdf: &Path, dir: &Path, cac
             let mut command = Command::new("powershell");
             command
                 .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", POWERPOINT_WINDOWS_SCRIPT])
-                .env("SELAH_ORIGEN", source)
-                .env("SELAH_DESTINO", pdf);
+                .env("EMETPRO_ORIGEN", source)
+                .env("EMETPRO_DESTINO", pdf);
             command
         }
         Converter::PowerPointMac => applescript(POWERPOINT_MAC_SCRIPT, source, pdf),
@@ -306,8 +306,8 @@ mod tests {
 
         let windows = command_for(&Converter::PowerPointWindows, source, pdf, dir, dir);
         let envs: Vec<_> = windows.get_envs().collect();
-        assert!(envs.contains(&(std::ffi::OsStr::new("SELAH_ORIGEN"), Some(source.as_os_str()))));
-        assert!(envs.contains(&(std::ffi::OsStr::new("SELAH_DESTINO"), Some(pdf.as_os_str()))));
+        assert!(envs.contains(&(std::ffi::OsStr::new("EMETPRO_ORIGEN"), Some(source.as_os_str()))));
+        assert!(envs.contains(&(std::ffi::OsStr::new("EMETPRO_DESTINO"), Some(pdf.as_os_str()))));
         assert!(windows.get_args().all(|a| a != source.as_os_str()));
 
         for converter in [Converter::PowerPointMac, Converter::Keynote] {

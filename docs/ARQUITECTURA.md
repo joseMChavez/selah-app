@@ -1,6 +1,6 @@
 # Arquitectura
 
-Selah se organiza **por funcionalidad**: Biblia, letras, medios, presentaciones, salida, ajustes, OBS. Cada una vive en su carpeta, en el backend y en la interfaz, con todo lo suyo dentro. Un núcleo común da lo que comparten todas. El núcleo no conoce a ninguna funcionalidad; ellas dependen de él.
+EmetPro se organiza **por funcionalidad**: Biblia, letras, medios, presentaciones, salida, ajustes, OBS. Cada una vive en su carpeta, en el backend y en la interfaz, con todo lo suyo dentro. Un núcleo común da lo que comparten todas. El núcleo no conoce a ninguna funcionalidad; ellas dependen de él.
 
 Así se puede tocar una funcionalidad sin abrir las demás, y los plugins de otros desarrolladores se enchufan igual que las funcionalidades propias (D-016).
 
@@ -39,7 +39,7 @@ src/
 | `plans` | Planes del culto: lo que se va a presentar, en orden (D-019) | `domain.rs` (Plan, PlanItem), `repo.rs` |
 | `settings` | Ajustes por clave | `repo.rs` |
 | `obs` | Transmisión con OBS | `client.rs` |
-| `transfer` | Importar y exportar letras (.selah, listas de Holyrics .hpls) | `domain.rs` (validar, repetidas, qué guardar), `formats/`, `repo.rs` |
+| `transfer` | Importar y exportar letras (.emetpro y los .selah de antes, listas de Holyrics .hpls) | `domain.rs` (validar, repetidas, qué guardar), `formats/`, `repo.rs` |
 | `remote` | Control remoto desde el teléfono (D-018, D-020, D-021) | `domain.rs` (órdenes, clave), `server.rs` (HTTP y WebSocket), `thumbs.rs` (miniaturas del PDF en pantalla), `board.rs` (pizarra) |
 
 ### Reglas
@@ -120,7 +120,7 @@ app/src/
 
 Están pensados sobre estas mismas piezas:
 
-- Su panel será un `SourcePanel` más, que carga el HTML del plugin en un `iframe` aislado y le da una API (`selah.screen`, `selah.storage`, `selah.keys`…) en vez de acceso a Tauri.
+- Su panel será un `SourcePanel` más, que carga el HTML del plugin en un `iframe` aislado y le da una API (`emetpro.screen`, `emetpro.storage`, `emetpro.keys`…) en vez de acceso a Tauri.
 - Su contenido en pantalla será un tipo nuevo de `OutputContent`, dibujado en la salida también dentro de un `iframe`.
 - Sus permisos se declararán en su `plugin.json` y se aceptarán al instalarlo, igual que cada funcionalidad tiene hoy su `<x>:default`.
 

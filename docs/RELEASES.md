@@ -1,74 +1,81 @@
-# Publicar una versión
+# Releasing a version
 
-Los instaladores se compilan en GitHub Actions (`.github/workflows/instaladores.yml`) y se publican en [Releases](https://github.com/joseMChavez/selah-app/releases). Ver D-013.
+The installers are built on GitHub Actions (`.github/workflows/instaladores.yml`) and published on [Releases](https://github.com/joseMChavez/selah-app/releases). See D-013 in [DECISIONS.md](DECISIONS.md).
 
-| Sistema | Archivos |
+| System | Files |
 |---|---|
-| Linux | `.deb` (Debian/Ubuntu), `.rpm` (Fedora/openSUSE), `.AppImage` (cualquier distribución) |
-| Windows | `.msi` y `-setup.exe` (NSIS) |
-| macOS | `.dmg` universal (Intel y Apple Silicon) |
+| Linux | `.deb` (Debian/Ubuntu), `.rpm` (Fedora/openSUSE), `.AppImage` (any distribution) |
+| Windows | `.msi` and `-setup.exe` (NSIS) |
+| macOS | universal `.dmg` (Intel and Apple Silicon) |
 
-## Pasos
+## Steps
 
-1. Con todo fusionado en `main`, crea y sube la etiqueta con la forma `vX.Y.Z`:
+1. Bump the version on `main` through a pull request: `app/package.json`, `app/package-lock.json` (two places), `app/src-tauri/Cargo.toml`, `app/src-tauri/Cargo.lock` (the `app` package), `app/src-tauri/tauri.conf.json`, and add a row to the history below.
+2. Once it is merged, tag the merge commit with the form `vX.Y.Z` and push the tag:
    ```sh
    git switch main && git pull
-   git tag v0.2.2
-   git push origin v0.2.2
+   git tag v0.9.0
+   git push origin v0.9.0
    ```
-   Los instaladores toman la versión de la etiqueta (`v0.2.2` → `0.2.2`); no hace falta cambiar ningún archivo.
-2. Actions compila los tres sistemas (unos 15–25 min) y deja un **borrador** en Releases. Si la etiqueta no tiene la forma `vX.Y.Z`, falla al principio.
-3. Revisa el borrador, prueba al menos un instalador y pulsa **Publish release**.
-4. Opcional: para que la versión del código coincida, actualízala en `app/src-tauri/tauri.conf.json`, `app/src-tauri/Cargo.toml` y `app/package.json` en un PR. Solo afecta a las compilaciones locales.
+   The installers take their version from the tag (`v0.9.0` → `0.9.0`), so a mismatch only affects local builds — but tag the commit that has the bumped version (see `v0.3.1` below).
+3. Actions builds the three systems (about 15–25 minutes) and leaves a **draft** on Releases. A tag that isn't `vX.Y.Z` fails right away.
+4. Review the draft, test at least one installer and press **Publish release**.
 
-Una etiqueta compila el código del commit al que apunta. Si una versión falla y hay que corregir algo, sube la siguiente etiqueta (`v0.2.3`) desde el `main` corregido.
+A tag builds the code of the commit it points to. If a release fails and something needs fixing, push the next tag (`v0.9.1`) from the fixed `main`.
 
-## Compilar sin publicar
+## Building without publishing
 
-En GitHub: **Actions → Instaladores → Run workflow**. Los instaladores quedan como artefactos de esa ejecución, durante 90 días.
+On GitHub: **Actions → Instaladores → Run workflow**. The installers are kept as artifacts of that run for 90 days.
 
-En local (solo Linux, e incluye las Biblias de `resources/bibles/`):
+Locally (Linux only; includes the Bibles in `app/src-tauri/resources/bibles/`):
 ```sh
 cd app
 npm run tauri build
 ```
-Los archivos quedan en `app/src-tauri/target/release/bundle/`.
+The files end up in `app/src-tauri/target/release/bundle/`.
 
-## Icono
+## Icon
 
-La fuente es `app/src-tauri/icons/icon.svg` (también `app/static/favicon.svg`). Tras cambiarla, se regeneran todos los tamaños:
+The source is `app/src-tauri/icons/icon.svg` (also `app/static/favicon.svg`). After changing it, regenerate every size:
 ```sh
 cd app
-rsvg-convert -w 1024 -h 1024 src-tauri/icons/icon.svg -o /tmp/selah-icon.png
-npx tauri icon /tmp/selah-icon.png -o src-tauri/icons
-rm -rf src-tauri/icons/android src-tauri/icons/ios src-tauri/icons/64x64.png   # Selah no los usa
+rsvg-convert -w 1024 -h 1024 src-tauri/icons/icon.svg -o /tmp/emetpro-icon.png
+npx tauri icon /tmp/emetpro-icon.png -o src-tauri/icons
+rm -rf src-tauri/icons/android src-tauri/icons/ios src-tauri/icons/64x64.png   # not used
 cp src-tauri/icons/icon.svg static/favicon.svg
 rsvg-convert -w 128 -h 128 static/favicon.svg -o static/favicon.png
+rsvg-convert -w 192 -h 192 static/favicon.svg -o static/remote/icon-192.png
+rsvg-convert -w 512 -h 512 static/favicon.svg -o static/remote/icon-512.png
+rsvg-convert -w 180 -h 180 -b white static/favicon.svg -o static/remote/apple-touch-icon.png
 ```
+The README logo (`docs/assets/logo-light.png` and `logo-dark.png`) is the same icon next to the name, in Noto Sans Bold.
 
-## Avisos al instalar
+## Warnings when installing
 
-Los instaladores no están firmados:
-- **Windows:** SmartScreen dice «Windows protegió su PC» → «Más información» → «Ejecutar de todas formas».
-- **macOS:** clic derecho sobre Selah en Aplicaciones → «Abrir» → «Abrir». Si dice que está dañado: `xattr -cr /Applications/Selah.app`.
-- **Linux:** el AppImage necesita permiso de ejecución (`chmod +x Selah_*.AppImage`).
+The installers are not signed:
+- **Windows:** SmartScreen says "Windows protected your PC" → "More info" → "Run anyway".
+- **macOS:** right-click EmetPro in Applications → "Open" → "Open". If it says the app is damaged: `xattr -cr /Applications/EmetPro.app`.
+- **Linux:** the AppImage needs execute permission (`chmod +x EmetPro_*.AppImage`).
 
-## Historial
+## History
 
-| Etiqueta | Resultado | Qué pasó |
+Up to `v0.8.2` the app was called **Selah**.
+
+| Tag | Result | What happened |
 |---|---|---|
-| `v0.2.0` | ❌ Fallida | El código seguía en `0.1.0` y el flujo exigía que la etiqueta coincidiera con la versión de los archivos. No compiló nada. |
-| `v0.2.1` | ❌ Fallida | La misma causa. Aprendizaje: el flujo pasó a tomar la versión de la etiqueta (PR #5). |
-| `v0.2.2` | ⚠️ Parcial | Windows y macOS compilaron; Linux falló al instalar dependencias: `libgstreamer1.0-dev` choca con libunwind en ubuntu-22.04. Aprendizaje: instalar solo los paquetes necesarios (PR #6). Queda un borrador sin instalador de Linux. |
-| `v0.2.3` | Pendiente | Primera versión con instaladores para los tres sistemas. |
-| `v0.3.0` | Pendiente | Letras (biblioteca, lista del culto, fondos de imagen o GIF, tipos de letra), Biblia en dos versiones, reloj y temporizador, presentaciones de PowerPoint (con LibreOffice), logo como marca de agua, «Enviar a pantalla» abre la salida sola, y ajustes y letras guardados en SQLite con opción de restablecer (D-014). |
-| `v0.3.1` | ❌ Descartada | La etiqueta se creó sobre `06dcd44` (el código de la 0.3.0) antes de fusionar #9 y #10: los instaladores dicen 0.3.1 pero no traen PowerPoint ni Keynote. Aprendizaje: subir la versión en `main` y etiquetar ese commit. Su borrador no se publica. |
-| `v0.3.2` | Pendiente | Presentaciones también con PowerPoint (Windows), Keynote o PowerPoint (macOS), no solo con LibreOffice. Actions con Node 24. |
-| `v0.3.3` | Pendiente | Keynote y PowerPoint en macOS: el archivo se pasa como alias para que la app, en sandbox, pueda abrirlo (antes Keynote decía que no podía abrir el archivo). |
-| `v0.4.0` | Pendiente | Presentaciones con LibreOffice primero; si no hay, Selah ofrece descargar su propia copia (26.2.6, SHA-256 comprobado) sin instalarla en el sistema, y se puede borrar desde Ajustes (D-015). |
-| `v0.5.0` | Pendiente | Importar y exportar letras: formato propio `.selah` (con lista del culto y fondos) y listas de Holyrics `.hpls`, con vista previa y elección para las repetidas (D-017). Preguntar antes de enviar a la pantalla de la iglesia. OBS: ya no arranca en modo seguro tras un cierre forzado, y si lo está, Selah lo explica. Una línea con `**` separa diapositivas. Código organizado por funcionalidad, cada una como plugin interno (D-016). |
-| `v0.6.0` | Pendiente | Control remoto desde el teléfono (D-018): se activa en Ajustes y se vincula con un QR en la misma red wifi. Busca y muestra versículos, cambia la versión de la Biblia, avanza o retrocede versículos y diapositivas, pone la pantalla en negro y vuelve a lo reciente (la presentación en la página donde quedó). Pide confirmación si la consola la pide. En pantalla completa y sin zoom. Puede requerir abrir los puertos 7300–7309 en el cortafuegos. |
-| `v0.7.0` | Pendiente | Planes del culto (D-019): pestaña Plan para preparar de antemano lo que se presenta, con nombre, fecha y notas, y secciones, letras, versículos (se pega la lista del predicador), medios y pausas. Clic prepara, doble clic envía y «Siguiente» avanza, saltando lo que falte. Los medios se guardan como copia en la carpeta de Selah. El plan se ve y se usa desde el teléfono. La Lista de Textos pasa a ser un plan. El temporizador tiene título, fondo propio y un borde rojo al pasarse del tiempo. **Una base actualizada a esta versión ya no la abre la 0.6.0:** para volver atrás hay que restaurar una copia de `selah.db`. |
-| `v0.8.0` | Pendiente | Control remoto (D-020): el teléfono ve la página de la presentación o el PDF que está en pantalla y una tira para saltar a cualquier página, diapositiva de una letra o versículo de un rango. Saltar no pregunta: deja unos segundos «Volver a …» para deshacer. Las letras se ven en el teléfono con sus saltos de línea. |
-| `v0.8.1` | Pendiente | Pizarra desde el control remoto (D-021): se dibuja con el dedo en el teléfono, encima de lo que está en pantalla (subrayar o resaltar un versículo, marcar una diapositiva o una página de PDF) o en hojas en blanco, y se ve en el proyector mientras se dibuja. Pluma, resaltador, borrador, colores, grosores y deshacer; dura mientras el control remoto esté encendido. En macOS la salida ya va al monitor elegido y no se queda en la pantalla del portátil. |
-| `v0.8.2` | Pendiente | Control remoto: al volver a un versículo mostrado en otra versión, la consola y el teléfono pasan a esa versión y el teléfono abre ese capítulo; la lista de versículos viene plegada alrededor del que está en pantalla («Ver el capítulo entero») y la versión se elige con botones. Consola: «Vista previa» y «En pantalla» en pestañas (se abre sola la que corresponde al preparar o enviar), las flechas mueven la pestaña que se ve y el menú cabe en ventanas bajas o estrechas. |
+| `v0.2.0` | ❌ Failed | The code was still at `0.1.0` and the workflow required the tag to match the version in the files. Nothing was built. |
+| `v0.2.1` | ❌ Failed | Same cause. Lesson: the workflow now takes the version from the tag (PR #5). |
+| `v0.2.2` | ⚠️ Partial | Windows and macOS built; Linux failed installing dependencies: `libgstreamer1.0-dev` clashes with libunwind on ubuntu-22.04. Lesson: install only the packages that are needed (PR #6). A draft without a Linux installer remains. |
+| `v0.2.3` | Pending | First version with installers for the three systems. |
+| `v0.3.0` | Pending | Lyrics (library, service list, image or GIF backgrounds, fonts), Bible in two versions, clock and timer, PowerPoint presentations (with LibreOffice), logo as a watermark, "Send to screen" opens the output by itself, and settings and lyrics stored in SQLite with a reset option (D-014). |
+| `v0.3.1` | ❌ Discarded | The tag was created on `06dcd44` (the 0.3.0 code) before merging #9 and #10: the installers say 0.3.1 but lack PowerPoint and Keynote. Lesson: bump the version on `main` and tag that commit. Its draft is not published. |
+| `v0.3.2` | Pending | Presentations also with PowerPoint (Windows) and Keynote or PowerPoint (macOS), not only LibreOffice. Actions on Node 24. |
+| `v0.3.3` | Pending | Keynote and PowerPoint on macOS: the file is passed as an alias so the sandboxed app can open it (Keynote used to say it couldn't open the file). |
+| `v0.4.0` | Pending | Presentations with LibreOffice first; if it's missing, the app offers to download its own copy (26.2.6, SHA-256 checked) without installing it system-wide, removable from Settings (D-015). |
+| `v0.5.0` | Pending | Import and export lyrics: own `.selah` format (with service list and backgrounds) and Holyrics `.hpls` playlists, with a preview and a choice for duplicates (D-017). Ask before sending to the church screen. OBS no longer starts in Safe Mode after a forced quit, and if it does, the app explains it. A line with `**` separates slides. Code organized by feature, each one an internal plugin (D-016). |
+| `v0.6.0` | Pending | Remote control from a phone (D-018): turned on in Settings and paired with a QR code on the same Wi-Fi. Searches and shows verses, changes the Bible version, moves through verses and slides, blacks out the screen and returns to recent content (a presentation on the page where it was left). Asks for confirmation if the console does. Full screen, no zoom. Ports 7300–7309 may need to be opened in the firewall. |
+| `v0.7.0` | Pending | Service plans (D-019): a Plan tab to prepare what will be shown, with name, date and notes, and sections, lyrics, verses (paste the preacher's list), media and pauses. Click prepares, double-click sends and "Next" advances, skipping missing items. Media are stored as a copy in the app's folder. The plan can be seen and used from the phone. The Texts list becomes a plan. The timer has a title, its own background and a red border when time is up. **A database upgraded to this version can't be opened by 0.6.0:** to go back, restore a copy of `selah.db`. |
+| `v0.8.0` | Pending | Remote control (D-020): the phone shows the page of the presentation or PDF on screen and a strip to jump to any page, lyric slide or verse in a range. Jumping doesn't ask: "Back to …" stays for a few seconds to undo. Lyrics show on the phone with their line breaks. |
+| `v0.8.1` | Pending | Whiteboard from the remote control (D-021): draw with a finger on the phone over what's on screen (underline or highlight a verse, mark a slide or a PDF page) or on blank sheets, shown on the projector while drawing. Pen, highlighter, eraser, colors, widths and undo; it lasts while the remote control is on. On macOS the output now goes to the chosen monitor instead of staying on the laptop screen. |
+| `v0.8.2` | Pending | Remote control: returning to a verse shown in another version switches the console and the phone to that version and opens that chapter on the phone; the verse list is folded around the verse on screen ("Whole chapter"), and the version is chosen with buttons. Console: "Preview" and "On screen" in tabs (the right one opens when preparing or sending), the arrow keys move the visible tab, and the menu fits short or narrow windows. |
+| `v0.9.0` | Pending | **Selah is renamed EmetPro** (D-022), with a new icon. On first launch it copies the Selah data (database, Bibles, backgrounds, plan media, LibreOffice copy, remote-control key) into its own folder and fixes the stored paths; the Selah folder is kept as a backup. Lyrics are exported as `.emetpro`; `.selah` files still import. OBS scenes and sources "Selah · …" are renamed "EmetPro · …". Paired phones keep working without scanning again. README and release notes in English. |

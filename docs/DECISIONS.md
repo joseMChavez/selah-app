@@ -1,6 +1,6 @@
 # Registro de decisiones
 
-## D-001 — Nombre: Selah (2026-10-31)
+## D-001 — Nombre: Selah (2026-10-31) — reemplazada por D-022
 - **Decisión:** usar "Selah" como nombre del producto.
 - **Motivo:** preferencia del autor; no se encontró otro proyecto de proyección para iglesias con ese nombre.
 - **Alternativas:** buscar otro nombre.
@@ -138,3 +138,11 @@
 - **Protocolo:** el teléfono manda operaciones por el mismo WebSocket: `draw` (un trazo en trozos de hasta 2000 números, cada uno dice desde qué punto sigue, así repetirlo no duplica nada), `erase` (un trazo entero), `wipe`, `addSheet`, `setPaper`; y la orden `showSheet` para la consola. Coordenadas enteras de 0 a 10000 sobre la pantalla entera; grosor relativo al alto. El backend valida, guarda y reparte a los teléfonos (canal `broadcast`; si uno se atrasa recibe la pizarra entera) y a la consola y la salida (evento `remote-board`). Al conectarse, el teléfono recibe la pizarra entera. Contenido de salida nuevo: `{ kind: "board", sheet }`.
 - **Límites:** 30 hojas, 300 capas, 3000 trazos por capa, 10000 puntos por trazo.
 - **Queda para después:** ver la imagen o el video de fondo en el teléfono, formas (flechas, rectángulos), texto escrito con el teclado y guardar una hoja como imagen.
+
+## D-022 — Nombre: EmetPro, en lugar de Selah (2026-11-14)
+- **Decisión:** la app pasa a llamarse **EmetPro** desde la 0.9.0. «Emet» (אמת) es «verdad, fidelidad» en hebreo; «Pro» no indica una versión de pago: la app sigue siendo gratuita y de código abierto. Se escribe «EmetPro», junto; `emetpro` en lo técnico (binario, identificador `org.emetpro.app`, `emetpro.db`, extensión `.emetpro`). Reemplaza a D-001.
+- **Motivo:** había al menos ocho apps bíblicas o devocionales llamadas «Selah» en las tiendas; con un nombre tan repetido la app se pierde en las búsquedas y puede chocar con una marca. «Emet» solo también estaba ocupado en el mismo rubro (Emet Faith); «EmetPro» no apareció en apps, repositorios ni como dominio en uso, salvo `emetpro.com`, registrado sin contenido.
+- **Alternativas:** Higaion (difícil de pronunciar), Verbofiel, Facistol, Neguinot; Asaf, Mizmor, Dabar, Davar, Emuná y Fidelis ya estaban en uso.
+- **Quien actualiza no pierde nada:** el identificador nuevo cambia la carpeta de datos. En el primer arranque, `core/legacy.rs` copia de `org.selah.app` la base (con lo pendiente en su WAL), `bibles`, `fondos`, `medios`, `libreoffice` y `remote-key`, y cambia las rutas guardadas que apuntaban a la carpeta vieja. Copia, no mueve: la carpeta de Selah queda de respaldo. La base llega la última, con un rename; si algo falla, se reintenta en el siguiente arranque mientras la base nueva no tenga letras ni planes propios.
+- **Compatibilidad que se mantiene:** los `.selah` se siguen importando; el contenido de los `.emetpro` es el mismo formato (cabecera `SELAHLTR`, `format: "selah-songs"`). En OBS, las escenas y fuentes «Selah · …» se renombran a «EmetPro · …» al conectar, sin duplicarlas. El teléfono lee la clave guardada con el nombre anterior. Las claves `selah.*` de localStorage se quedan: son de una migración más antigua.
+- **Pendiente:** verificar la marca (USPTO, EUIPO, Italia) y decidir si se renombra el repositorio `selah-app`.
