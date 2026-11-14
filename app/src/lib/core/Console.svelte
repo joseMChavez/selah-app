@@ -49,6 +49,8 @@
   let tab = $derived(sourcePanels.some((p) => p.id === settings.tab) ? settings.tab : sourcePanels[0].id);
   /** La sección de contenido ocupa toda la ventana; una barra inferior sigue mostrando preparado y en pantalla. */
   let expanded = $derived(settings.expanded);
+  /** Qué pestaña se ve: la vista previa o lo que está en pantalla. Las flechas mueven la que se ve. */
+  let stageTab = $state<"prepared" | "live">("live");
   /** Lo que había antes de poner la pantalla en negro, para volver con un clic. */
   let beforeBlack = $state<OutputContent | null>(null);
 
@@ -117,6 +119,8 @@
     // Volver a elegir una presentación que ya estuvo en pantalla la deja en la página donde quedó.
     content = resume(content);
     prepared = content;
+    // Algo nuevo para ver antes de enviarlo: se muestra la vista previa.
+    stageTab = "prepared";
     if (content.kind === "pdf") ensurePageCount(content.path);
   }
 
@@ -193,6 +197,8 @@
     if (content.kind === "timer") content = startTimer(content);
     beforeBlack = null;
     output = await platform.setOutputContent(content);
+    // Ya está en pantalla: se ve lo que ve la congregación.
+    stageTab = "live";
   });
 
   function changeTimer(change: "toggle" | "restart" | "add") {
@@ -252,13 +258,17 @@
     }
     // No interferir mientras se escribe. En los controles de selección sí se navega.
     // En la vista de Transmisión las flechas no tocan la proyección: no se vería el cambio.
-    if (view !== "projection" || isTyping(event.target as Element) || !livePosition) return;
-    if (event.key === "ArrowRight" || event.key === "PageDown") {
+    if (view !== "projection" || isTyping(event.target as Element)) return;
+    const forward = event.key === "ArrowRight" || event.key === "PageDown";
+    if (!forward && event.key !== "ArrowLeft" && event.key !== "PageUp") return;
+    // Las flechas mueven la pestaña que se ve. Ampliado, la barra de abajo es la de lo que está en pantalla.
+    if (stageTab === "prepared" && !expanded) {
+      if (!preparedPosition) return;
       event.preventDefault();
-      stepLive(true);
-    } else if (event.key === "ArrowLeft" || event.key === "PageUp") {
+      goPrepared(preparedPosition.n + (forward ? 1 : -1));
+    } else if (livePosition) {
       event.preventDefault();
-      stepLive(false);
+      stepLive(forward);
     }
   }
 
@@ -531,13 +541,24 @@
       {/each}
     </section>
 
-    <section class="card prepared" aria-labelledby="prepared-title">
-      <div class="card-head">
-        <h2 id="prepared-title">{t("prepared.title")}</h2>
-        <span class="muted small">{t("prepared.tag")}</span>
+    <!-- Vista previa y En pantalla en pestañas: siempre a la vista junto al contenido, sin confundirse. Al preparar algo
+         nuevo se abre la vista previa; al enviarlo, lo que está en pantalla. -->
+    <section class="card stage">
+      <div class="stage-tabs" role="tablist">
+        <button class="stage-tab" role="tab" id="tab-prepared" aria-controls="pane-prepared" aria-selected={stageTab === "prepared"} onclick={() => (stageTab = "prepared")}>
+          <span class="stage-title">{t("stage.preview")}</span>
+          <span class="stage-what">{prepared.kind === "empty" ? t("prepared.tag") : describe(prepared)}</span>
+        </button>
+        <button class="stage-tab live" role="tab" id="tab-live" aria-controls="pane-live" aria-selected={stageTab === "live"} onclick={() => (stageTab = "live")}>
+          <span class="stage-title"><span class="live-dot" class:on={output.open} aria-hidden="true"></span>{t("live.title")}</span>
+          <span class="stage-what">{describe(output.content)}</span>
+        </button>
       </div>
-      <div class="card-body stack">
-        <div class="screen"><OutputView content={prepared} style={output.style} preview /></div>
+      <div class="card-body stack" role="tabpanel" id="pane-prepared" aria-labelledby="tab-prepared" hidden={stageTab !== "prepared"}>
+        <div class="screen preview">
+          <OutputView content={prepared} style={output.style} preview />
+          <span class="screen-tag">{t("stage.previewTag")}</span>
+        </div>
         {#if prepared.kind === "empty"}
           <p class="muted">{t("prepared.empty")}</p>
         {/if}
@@ -549,20 +570,16 @@
           </div>
         {/if}
         <SlideStrip content={prepared} style={output.style} tone="prepared" onselect={goPrepared} />
+        {#if preparedPosition}<p class="muted small">{t("prepared.keysHint")}</p>{/if}
         <button class="btn primary big send" onclick={() => requestSend(prepared)} disabled={busy || prepared.kind === "empty"}>
           {t("prepared.send")} →
         </button>
       </div>
-    </section>
-
-    <section class="card live" aria-labelledby="live-title">
-      <div class="card-head">
-        <h2 id="live-title">{t("live.title")}</h2>
-        <span class="badge" class:on={output.open}>{output.open ? t("live.badge") : t("live.closedBadge")}</span>
-      </div>
-      <div class="card-body stack">
-        <div class="screen live"><OutputView content={output.content} style={output.style} preview /></div>
-        <p class="muted small">{t("live.tag")}: <strong>{describe(output.content)}</strong></p>
+      <div class="card-body stack" role="tabpanel" id="pane-live" aria-labelledby="tab-live" hidden={stageTab !== "live"}>
+        <div class="screen live">
+          <OutputView content={output.content} style={output.style} preview />
+          <span class="screen-tag live">{output.open ? t("live.badge") : t("live.closedBadge")}</span>
+        </div>
         {#if !output.open}<p class="muted small">{t(selected ? "live.autoOpenHint" : "live.closedHint")}</p>{/if}
 
         {#if livePosition}
@@ -615,7 +632,7 @@
       <div class="dock-part">
         <div class="mini screen"><OutputView content={prepared} style={output.style} preview /></div>
         <div class="dock-info">
-          <span class="dock-title">{t("prepared.title")}</span>
+          <span class="dock-title">{t("stage.preview")}</span>
           {#if preparedPosition}
             <span class="muted small">{t(preparedPosition.label, { n: preparedPosition.n, total: preparedPosition.total ?? "…" })}</span>
           {/if}
@@ -723,6 +740,7 @@
     flex-direction: column;
     gap: 4px;
     padding: 14px 8px;
+    overflow-y: auto;
     background: var(--surface);
     border-right: 1px solid var(--border);
   }
@@ -755,12 +773,53 @@
     display: grid;
     gap: 14px;
     padding: 14px 16px 16px;
-    grid-template-columns: minmax(340px, 0.95fr) minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-areas: "sources prepared live";
+    grid-template-columns: minmax(340px, 1fr) minmax(0, 1.15fr);
+    grid-template-areas: "sources stage";
   }
   .sources { grid-area: sources; }
-  .prepared { grid-area: prepared; }
-  .live { grid-area: live; }
+  .stage { grid-area: stage; overflow: hidden; }
+  .stage-tabs { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--border); }
+  .stage-tab {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    min-width: 0;
+    padding: 10px 14px 9px;
+    font: inherit;
+    text-align: left;
+    color: var(--muted);
+    background: var(--surface-2);
+    border: 0;
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+  }
+  .stage-tab:first-child { border-top-left-radius: inherit; }
+  .stage-tab:last-child { border-top-right-radius: inherit; border-left: 1px solid var(--border); }
+  .stage-tab:hover { color: var(--text); }
+  .stage-tab[aria-selected="true"] { color: var(--text); background: transparent; border-bottom-color: var(--accent); }
+  .stage-tab.live[aria-selected="true"] { border-bottom-color: var(--live); }
+  .stage-title { display: flex; align-items: center; gap: 7px; font-size: 16px; font-weight: 700; }
+  .stage-what { max-width: 100%; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .live-dot.on { background: var(--live); box-shadow: 0 0 0 3px rgb(239 107 99 / 0.25); }
+  /* La vista previa no se parece a la pantalla: borde punteado y su etiqueta. */
+  .screen.preview { border-style: dashed; border-color: var(--accent); }
+  .screen-tag {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 5;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: 750;
+    letter-spacing: 0.06em;
+    border-radius: 5px;
+    background: var(--accent);
+    color: var(--accent-text);
+    pointer-events: none;
+  }
+  .screen-tag.live { background: var(--live); color: #fff; }
   .card { display: flex; flex-direction: column; min-height: 0; }
   .card-head {
     display: flex;
@@ -793,8 +852,7 @@
   .badge.on { background: var(--live); color: #fff; }
 
   .workspace.expanded { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); grid-template-areas: "sources"; }
-  .workspace.expanded .prepared,
-  .workspace.expanded .live { display: none; }
+  .workspace.expanded .stage { display: none; }
   .workspace.expanded .sources { position: static; max-height: none; }
 
   .dock {
@@ -814,33 +872,33 @@
   .style summary { cursor: pointer; font-weight: 650; padding: 4px 0 10px; }
   .style :global(.btn.small) { margin-top: 10px; font-size: 13px; min-height: 32px; }
 
-  /* Ventana mediana: «Preparado» y «En pantalla» se apilan junto al contenido. */
-  @media (max-width: 1280px) {
-    .workspace {
-      grid-template-columns: minmax(320px, 1fr) minmax(0, 1.1fr);
-      grid-template-rows: auto auto;
-      grid-template-areas: "sources prepared" "sources live";
-      overflow: auto;
-    }
-    .workspace .card { min-height: auto; }
-    .sources { min-height: 0; max-height: calc(100vh - 110px); position: sticky; top: 0; }
+  /* Ventana baja: el menú lateral se aprieta para que quepa entero (y si no, se desplaza). */
+  @media (max-height: 760px) {
+    .sidebar { padding: 8px; gap: 2px; }
+    .nav-item { padding: 6px 4px; gap: 2px; }
+    svg { width: 22px; height: 22px; }
   }
 
-  /* Ventana estrecha: una columna; la página entera se desplaza. */
+  /* Ventana estrecha: una columna, con las pestañas arriba (siempre a la vista); la página entera se desplaza. */
   @media (max-width: 860px) {
     .app { height: auto; min-height: 100vh; }
     .workspace {
       grid-template-columns: minmax(0, 1fr);
-      grid-template-areas: "sources" "prepared" "live";
+      grid-template-areas: "stage" "sources";
       overflow: visible;
       padding: 12px;
     }
     .sources { position: static; max-height: none; }
     .card-body { overflow: visible; }
+    .stage .screen { max-width: 420px; align-self: center; }
     .body { flex-direction: column; }
-    .sidebar { flex-direction: row; justify-content: center; padding: 6px; border-right: 0; border-bottom: 1px solid var(--border); }
-    .sidebar hr { width: auto; height: auto; margin: 0 4px; border-top: 0; border-left: 1px solid var(--border); }
-    .nav-item { flex-direction: row; width: auto; padding: 8px 14px; }
+    /* El menú en una fila que se desplaza de lado si no cabe (centrado si cabe, sin cortar el primero). */
+    .sidebar { flex-direction: row; padding: 6px; overflow-x: auto; overflow-y: hidden; border-right: 0; border-bottom: 1px solid var(--border); }
+    .sidebar > :first-child { margin-left: auto; }
+    .sidebar > :last-child { margin-right: auto; }
+    .settings-item { margin-top: 0; }
+    .sidebar hr { flex: none; width: auto; height: auto; margin: 0 4px; border-top: 0; border-left: 1px solid var(--border); }
+    .nav-item { flex: none; flex-direction: row; width: auto; padding: 8px 12px; white-space: nowrap; }
     .dock { position: sticky; bottom: 0; }
     .prefs { margin-left: 0; }
   }
