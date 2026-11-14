@@ -60,7 +60,16 @@ export type RemoteStrip =
 export type RemoteLive =
   | { kind: "empty" }
   | { kind: "black" }
-  | { kind: "scripture"; reference: string; text: string; version: string }
+  | {
+      kind: "scripture";
+      reference: string;
+      text: string;
+      version: string;
+      /** La Biblia del versículo (id); null si ya no está entre las que se pueden elegir. */
+      bible: string | null;
+      /** Libro, capítulo y versículo; null si no se pudo saber. */
+      place: { book: number; chapter: number; verse: number } | null;
+    }
   | { kind: "pdf"; name: string }
   | { kind: "text"; text: string }
   /** Una hoja de la pizarra. */

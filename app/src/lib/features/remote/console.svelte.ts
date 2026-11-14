@@ -1,7 +1,8 @@
 // El control remoto visto desde la consola: encender y apagar el servidor, y contarle a los teléfonos
 // lo que hay en pantalla. Las órdenes del teléfono las aplica Console.svelte, igual que sus botones.
 import { bookLanguage } from "$lib/features/bible/scripture";
-import { currentBibles, visibleBibles } from "$lib/features/bible/bibles.svelte";
+import { bibleByAbbreviation, currentBibles, visibleBibles } from "$lib/features/bible/bibles.svelte";
+import { parseQuery } from "$lib/features/bible/reference";
 import type { DeckPosition } from "$lib/features/output/deck";
 import { lastSeen, recentScreens, screenKey } from "$lib/features/output/history.svelte";
 import { toMessage, type Message } from "$lib/core/messages";
@@ -181,7 +182,18 @@ function liveOf(content: OutputContent, description: string): RemoteLive {
       return { kind: content.kind };
     case "scripture": {
       const verse = content.verses[content.index];
-      return { kind: "scripture", reference: verse?.reference ?? "", text: verse?.text ?? "", version: content.version };
+      const reference = verse?.reference ?? "";
+      // Dónde está, para que el teléfono abra ese capítulo en esa versión.
+      const bible = bibleByAbbreviation(content.version);
+      const at = bible ? parseQuery(reference, bookLanguage(bible)).reference : null;
+      return {
+        kind: "scripture",
+        reference,
+        text: verse?.text ?? "",
+        version: content.version,
+        bible: bible?.id ?? null,
+        place: at && at.verseStart !== null ? { book: at.book, chapter: at.chapter, verse: at.verseStart } : null,
+      };
     }
     case "pdf":
       return { kind: "pdf", name: content.path.split(/[\\/]/).pop() ?? content.path };
